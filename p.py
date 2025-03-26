@@ -11,7 +11,11 @@ from pdf_utils import generate_pdf_for_week
 # ------------------------------------------------------------------------------
 # Configuração inicial e título
 # ------------------------------------------------------------------------------
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="Programação de Atividades IDARON", 
+    page_icon="🗓️",  # Pode ser um emoji ou caminho para uma imagem
+    layout="wide"
+)
 st.title("Progamação de Atividades IDARON")
 
 # ------------------------------------------------------------------------------
