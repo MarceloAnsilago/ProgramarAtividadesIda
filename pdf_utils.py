@@ -169,7 +169,7 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
     
     # (Opcional) Adicionar o rodapé com o plantão, se existir
     if plantao:
-        footer_text = f"➤ Plantão para recebimento de vacinas e agrotóxicos: {plantao}"
+        footer_text = f"➤ Plantão para recebimento de vacinas, agrotóxicos e produtos biológicos: {plantao}"
 
         footer_paragraph = Paragraph(footer_text, paragraph_style)
         elements.append(Spacer(1, 12))
