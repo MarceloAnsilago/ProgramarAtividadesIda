@@ -312,13 +312,24 @@ with tab2:
                 if not week_dates:
                     labels.append("Semana vazia")
                     continue
+
                 first_date = week_dates[0]
-                year_str = first_date.strftime("%Y")
-                month_num = int(first_date.strftime("%m"))
-                key_mes = (year_str, month_num)
-                month_weeks_count[key_mes] = month_weeks_count.get(key_mes, 0) + 1
-                ordinal_name = get_ordinal_week_in_month(month_weeks_count[key_mes])
-                month_name_pt = month_map_pt[month_num]
+                year = first_date.year
+                month = first_date.month
+
+                # Semana da data no calendário
+                _, week_number = first_date.isocalendar()[:2]
+
+                # Encontrar primeira semana ISO do mês
+                first_day_of_month = date(year, month, 1)
+                _, first_week_number = first_day_of_month.isocalendar()[:2]
+
+                week_position_in_month = week_number - first_week_number + 1
+                if week_position_in_month < 1:
+                    week_position_in_month = 1  # segurança em caso de bordas entre anos
+
+                ordinal_name = get_ordinal_week_in_month(week_position_in_month)
+                month_name_pt = month_map_pt[month]
                 label = f"{ordinal_name} semana do mês de {month_name_pt}"
                 labels.append(label)
 
