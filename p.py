@@ -12,7 +12,7 @@ from pdf_utils import generate_pdf_for_week
 # Configuração inicial e título
 # ------------------------------------------------------------------------------
 st.set_page_config(layout="wide")
-st.title("Calendário de Atividades - PDF Embutido e ULSAV/Supervisão")
+st.title("Progamação de Atividades IDARON")
 
 # ------------------------------------------------------------------------------
 # CSS para personalizar estilos
@@ -140,7 +140,6 @@ def add_week_if_not_exists(ref_date, include_saturday=False, include_sunday=Fals
     if wid not in st.session_state["semanas"]:
         st.session_state["semanas"][wid] = get_week_dates(ref_date, include_saturday, include_sunday)
         st.session_state["week_order"].append(wid)
-        # Adicionar Expediente Administrativo em cada dia da semana
         for day_date in st.session_state["semanas"][wid]:
             add_activity_to_date(
                 day_date,
@@ -160,7 +159,6 @@ def add_activity_to_date(activity_date, atividade, servidores, veiculo):
     })
 
 def add_server_to_expediente(date_str, server):
-    """Se um servidor for removido de uma atividade, devolve-o para Expediente Administrativo."""
     for act in st.session_state["atividades_dia"].get(date_str, []):
         if act["atividade"] == "Expediente Administrativo":
             if server not in act["servidores"]:
@@ -168,21 +166,18 @@ def add_server_to_expediente(date_str, server):
             return
 
 def remove_server_from_card(date_str, card_index, server):
-    """Remove um servidor específico de um card e o retorna ao Expediente Administrativo."""
     card = st.session_state["atividades_dia"][date_str][card_index]
     if server in card["servidores"]:
         card["servidores"].remove(server)
         add_server_to_expediente(date_str, server)
 
 def remove_activity_card(date_str, card_index):
-    """Remove completamente um card (atividade), devolvendo os servidores ao Expediente Administrativo."""
     card = st.session_state["atividades_dia"][date_str][card_index]
     for server in card["servidores"]:
         add_server_to_expediente(date_str, server)
     del st.session_state["atividades_dia"][date_str][card_index]
 
 def get_available_servers(day_date):
-    """Retorna servidores que estão em Expediente Administrativo no dia especificado."""
     date_str = day_date.strftime("%d/%m/%Y")
     if date_str in st.session_state["atividades_dia"]:
         for act in st.session_state["atividades_dia"][date_str]:
@@ -191,7 +186,6 @@ def get_available_servers(day_date):
     return []
 
 def remove_week(week_id):
-    """Remove toda a semana do estado, incluindo suas atividades."""
     if week_id in st.session_state["semanas"]:
         for day_date in st.session_state["semanas"][week_id]:
             date_str = day_date.strftime("%d/%m/%Y")
@@ -205,10 +199,6 @@ def remove_week(week_id):
 # Resumo: conta itens (exceto Expediente Administrativo)
 # ------------------------------------------------------------------------------
 def get_summary_details_for_week(week_id):
-    """
-    Retorna 3 dicionários com contagem de (activities, servers, vehicles)
-    ignorando 'Expediente Administrativo'.
-    """
     activities = {}
     servers = {}
     vehicles = {}
@@ -218,55 +208,13 @@ def get_summary_details_for_week(week_id):
         day_acts = st.session_state["atividades_dia"].get(date_str, [])
         for act in day_acts:
             if act["atividade"] != "Expediente Administrativo":
-                # Atividades
                 activities[act["atividade"]] = activities.get(act["atividade"], 0) + 1
-                # Servidores
                 for s in act["servidores"]:
                     servers[s] = servers.get(s, 0) + 1
-                # Veículos
                 if act["veiculo"] and act["veiculo"] != "Nenhum":
                     vehicles[act["veiculo"]] = vehicles.get(act["veiculo"], 0) + 1
     return activities, servers, vehicles
 
-# ------------------------------------------------------------------------------
-# Funções de PDF (Placeholder + Visualização)
-# ------------------------------------------------------------------------------
-def generate_pdf_placeholder():
-    """Exemplo simples de PDF gerado para testar."""
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=LETTER)
-    c.drawString(72, 700, "Relatório de Atividades - Exemplo")
-    c.drawString(72, 680, "Customizar conforme necessário.")
-    c.showPage()
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-def show_pdf_with_fallback(pdf_buffer, filename="arquivo.pdf", width=600, height=800):
-    """
-    Exibe PDF dentro de um iframe (se o navegador permitir),
-    com fallback para download se o Chrome bloquear.
-    """
-    import base64
-
-    b64_pdf = base64.b64encode(pdf_buffer.getvalue()).decode("utf-8")
-
-    pdf_viewer = f"""
-    <iframe 
-        src="data:application/pdf;base64,{b64_pdf}" 
-        width="{width}" 
-        height="{height}" 
-        type="application/pdf"
-        style="border: none;"
-    >
-    Este navegador não suporta visualização embutida de PDF.
-    </iframe>
-    <p style="color:gray; font-size: 0.9rem; margin-top: 8px;">
-        Se o PDF não carregar acima, <a href="data:application/pdf;base64,{b64_pdf}" download="{filename}">clique aqui para baixar o arquivo</a>.
-    </p>
-    """
-
-    st.markdown(pdf_viewer, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
 # Layout com Abas
@@ -278,7 +226,7 @@ tab1, tab2 = st.tabs(["Dados", "Programação"])
 # ------------------------------------------------------------------------------
 with tab1:
     st.header("Gerenciar Dados")
-    c1, c2, c3 = st.columns([1, 2, 1])
+    c1, c2, c3 = st.columns([1,2,1])
     with c2:
         # Upload de servidores
         up_serv = st.file_uploader("Arquivo de Servidores (txt)", type="txt", key="upload_servidores")
@@ -286,11 +234,8 @@ with tab1:
             lines = read_text_file(up_serv)
             st.session_state["all_servidores"] = [l.strip() for l in lines if l.strip()]
         st.write("### Buscar txt Servidores")
-        sel_serv = st.multiselect(
-            "Selecione os Servidores",
-            st.session_state["all_servidores"],
-            default=st.session_state["all_servidores"]
-        )
+        sel_serv = st.multiselect("Selecione os Servidores", st.session_state["all_servidores"],
+                                  default=st.session_state["all_servidores"])
         st.session_state["servidores"] = sel_serv
 
         st.divider()
@@ -301,11 +246,8 @@ with tab1:
             lines = read_text_file(up_ativ)
             st.session_state["all_atividades"] = [l.strip() for l in lines if l.strip()]
         st.write("### Buscar txt Atividades")
-        sel_ativ = st.multiselect(
-            "Selecione as Atividades",
-            st.session_state["all_atividades"],
-            default=st.session_state["all_atividades"]
-        )
+        sel_ativ = st.multiselect("Selecione as Atividades", st.session_state["all_atividades"],
+                                  default=st.session_state["all_atividades"])
         st.session_state["atividades"] = sel_ativ
 
         st.divider()
@@ -316,11 +258,8 @@ with tab1:
             lines = read_text_file(up_veic)
             st.session_state["all_veiculos"] = [l.strip() for l in lines if l.strip()]
         st.write("### Buscar txt Veículos")
-        sel_veic = st.multiselect(
-            "Selecione os Veículos",
-            st.session_state["all_veiculos"],
-            default=st.session_state["all_veiculos"]
-        )
+        sel_veic = st.multiselect("Selecione os Veículos", st.session_state["all_veiculos"],
+                                  default=st.session_state["all_veiculos"])
         st.session_state["veiculos"] = sel_veic
 
         st.divider()
@@ -331,11 +270,8 @@ with tab1:
             lines = read_text_file(up_ul_sups)
             st.session_state["all_ul_sups"] = [l.strip() for l in lines if l.strip()]
         st.write("### Buscar txt ULSAV e Supervisão")
-        sel_ul_sups = st.multiselect(
-            "Selecione ULSAV/ Supervisão",
-            st.session_state["all_ul_sups"],
-            default=st.session_state["all_ul_sups"]
-        )
+        sel_ul_sups = st.multiselect("Selecione ULSAV/ Supervisão", st.session_state["all_ul_sups"],
+                                     default=st.session_state["all_ul_sups"])
         st.session_state["ul_sups"] = sel_ul_sups
 
 # ------------------------------------------------------------------------------
@@ -348,24 +284,23 @@ with tab2:
     else:
         st.write("Selecione uma data para criar (ou visualizar) a semana correspondente:")
         selected_date = st.date_input("Data para a semana:", value=date.today())
-        
+
         colA, colB = st.columns(2)
         with colA:
             include_saturday = st.checkbox("Incluir Sábado", value=False)
         with colB:
             include_sunday = st.checkbox("Incluir Domingo", value=False)
-        
+
         if st.button("🗓️Adicionar Semana"):
             add_week_if_not_exists(selected_date, include_saturday, include_sunday)
             st.success("Semana adicionada!")
             st.rerun()
-        
+
         st.markdown("---")
 
-        
         if st.session_state["week_order"]:
-            # Gerar rótulos no formato "Primeira semana do mês de março" etc.
-            month_weeks_count = {}  # chave: (ano, mês) → contador
+            # Gera rótulos no formato "Primeira semana do mês de março" etc.
+            month_weeks_count = {}
             labels = []
             for wid in st.session_state["week_order"]:
                 week_dates = st.session_state["semanas"][wid]
@@ -381,33 +316,32 @@ with tab2:
                 month_name_pt = month_map_pt[month_num]
                 label = f"{ordinal_name} semana do mês de {month_name_pt}"
                 labels.append(label)
-            
-            # Criar abas para cada semana
+
             weeks_tabs = st.tabs(labels)
-            
+
             for idx, wid in enumerate(st.session_state["week_order"]):
                 with weeks_tabs[idx]:
                     st.markdown(f"## {labels[idx]}")
-                    
+
                     # Linha superior: 3 colunas -> Excluir Semana | Formulário | Resumo
                     top_col1, top_col2, top_col3 = st.columns([1,1,1])
-                    
+
                     with top_col1:
                         if st.button("🗑️Excluir Semana", key=f"excluir_{wid}"):
                             remove_week(wid)
                             st.warning(f"Semana {wid} excluída!")
                             st.rerun()
-                    
+
                     week_dates = st.session_state["semanas"][wid]
                     day_options = [f"{dias_semana[d.strftime('%A')]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
                     option_to_date = {option: d for option, d in zip(day_options, week_dates)}
-                    
+
                     with top_col2:
                         chosen_day = st.selectbox("Selecione o dia", day_options, key=f"dia_select_{wid}")
                         chosen_date = option_to_date[chosen_day]
                         st.write(f"### Adicionar Nova Atividade ({chosen_day})")
-                        
-                        # Função auxiliar para obter servidores já alocados no dia (exceto Expediente Adm)
+
+                        # Servidores já alocados no dia (exceto Expediente)
                         def get_alocados_no_dia(chosen_date):
                             date_str = chosen_date.strftime("%d/%m/%Y")
                             alocados = set()
@@ -417,18 +351,17 @@ with tab2:
                                         for s in act["servidores"]:
                                             alocados.add(s)
                             return alocados
-                        
+
                         alocados_hoje = get_alocados_no_dia(chosen_date)
                         _, servers_summary, _ = get_summary_details_for_week(wid)
-                     
+
                         def format_server_name(server: str) -> str:
-                            """Mostra (já alocado, X) se o servidor está no dia, e contagem X no total da semana."""
                             count = servers_summary.get(server, 0)
                             if server in alocados_hoje:
                                 return f"{server} (já alocado, {count})"
                             else:
                                 return f"{server} ({count})"
-                        
+
                         with st.form(key=f"form_nova_atividade_{wid}"):
                             atividade_escolhida = st.selectbox("Atividade", st.session_state["atividades"])
                             available_servers = st.session_state["servidores"]
@@ -440,18 +373,18 @@ with tab2:
                                 placeholder="Selecione um ou mais servidores..."
                             )
                             veiculo_escolhido = st.selectbox("Veículo", st.session_state["veiculos"])
-                            
+
                             if st.form_submit_button("➕Adicionar Atividade"):
                                 date_str = chosen_date.strftime("%d/%m/%Y")
-                                # Remove os servidores do Expediente Administrativo
                                 if date_str in st.session_state["atividades_dia"]:
                                     for a_idx, act in enumerate(st.session_state["atividades_dia"][date_str]):
                                         if act["atividade"] == "Expediente Administrativo":
+                                            # Remove esses servidores do Expediente
                                             act["servidores"] = [s for s in act["servidores"] if s not in servidores_escolhidos]
                                             break
                                 add_activity_to_date(chosen_date, atividade_escolhida, servidores_escolhidos, veiculo_escolhido)
                                 st.rerun()
-                    
+
                     with top_col3:
                         # Resumo da semana
                         dias_com_atividades = []
@@ -462,7 +395,7 @@ with tab2:
                             if any(act["atividade"] != "Expediente Administrativo" for act in acts):
                                 dias_com_atividades.append(day_name_pt)
                         dias_label = "<br>".join(dias_com_atividades) if dias_com_atividades else "Nenhum"
-                        
+
                         activities_summary, servers_summary, vehicles_summary = get_summary_details_for_week(wid)
                         summary_html = f"""
                         <div class="summary-card">
@@ -506,19 +439,19 @@ with tab2:
                         </div>
                         """
                         st.markdown(summary_html, unsafe_allow_html=True)
-                    
+
                     st.markdown("---")
-                    
-                    # Listagem das atividades de cada dia (cards)
+
+                    # Listagem das atividades de cada dia
                     cols = st.columns(len(week_dates))
                     for j, current_date in enumerate(week_dates):
                         with cols[j]:
                             day_name_en = current_date.strftime("%A")
                             day_name_pt = dias_semana.get(day_name_en, day_name_en)
                             date_str = current_date.strftime("%d/%m/%Y")
-                            
+
                             st.markdown(f"<div class='day-title'>{day_name_pt} - {date_str}</div>", unsafe_allow_html=True)
-                            
+
                             day_acts = st.session_state["atividades_dia"].get(date_str, [])
                             if day_acts:
                                 for act_idx, atividade in enumerate(day_acts):
@@ -533,31 +466,30 @@ with tab2:
                                                 value=True,
                                                 key=f"checkbox_{date_str}_{act_idx}"
                                             )
-                                        
+
                                         st.write("Servidores: (desmarque para remover)")
                                         server_states = {}
                                         for s in atividade["servidores"]:
                                             server_states[s] = st.checkbox(
                                                 s, value=True, key=f"{date_str}_{act_idx}_{s}"
                                             )
-                                        
+
                                         st.write(f"**Veículo:** {atividade['veiculo']}")
-                                        
+
                                         if st.form_submit_button("🔄Atualizar"):
-                                            # Se o usuário desmarcou a atividade, remove o card
                                             if atividade["atividade"] != "Expediente Administrativo":
                                                 if not activity_checked:
                                                     remove_activity_card(date_str, act_idx)
                                                     st.rerun()
-                                            
-                                            # Se o usuário desmarcou algum servidor, remove do card
+
                                             for s_name, checked in server_states.items():
                                                 if not checked:
                                                     remove_server_from_card(date_str, act_idx, s_name)
                                             st.rerun()
+
                     st.markdown('<hr class="full-width-hr">', unsafe_allow_html=True)
-                    
-                    # Impressões individuais para esta semana
+
+                    # Impressões individuais (semana)
                     report_col1, report_col2, report_col3 = st.columns([1,2,1])
                     with report_col2:
                         st.write("### Impressões")
@@ -570,109 +502,100 @@ with tab2:
                         }
                         </style>
                         """, unsafe_allow_html=True)
-                        
-                        # Escolha de plantão
+
+                        # Campo de plantão
                         plantao = st.selectbox(
                             "Plantão para recebimento de vacinas e agrotóxicos",
                             options=st.session_state["servidores"],
                             key=f"plantao_{wid}"
                         )
-                        
-                        colA, colB = st.columns([1,1])
-                        
-                        with colA:
-                            if st.button("📄 Imprimir Programação", key=f"imprimir_programacao_{wid}"):
-                                # Monta a lista de cards do PDF
-                                cards_list = []
-                                for day_date in week_dates:
-                                    date_str = day_date.strftime("%d/%m/%Y")
-                                    day_name_en = day_date.strftime("%A")
-                                    day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
-                                    day_acts = st.session_state["atividades_dia"].get(date_str, [])
-                                    cards_list.append({
-                                        "Dia": day_label,
-                                        "Activities": day_acts
-                                    })
-                                label_da_semana = labels[idx]
-                                ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
-                                supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
-                                pdf_bytes_programacao = generate_pdf_for_week(
-                                    cards_list,
-                                    label_da_semana,
-                                    ulsav_name,
-                                    supervisao_name,
-                                    plantao
-                                )
-                                st.session_state[f"pdf_programacao_{wid}"] = pdf_bytes_programacao
-                        
-                        with colB:
-                            if st.button("📝 Imprimir relatório de atividades", key=f"imprimir_relatorio_{wid}"):
-                                atividades_por_servidor = {}
-                                for date_str, acts in st.session_state["atividades_dia"].items():
-                                    for act in acts:
-                                        if act["atividade"] != "Expediente Administrativo":
-                                            for servidor in act["servidores"]:
-                                                if servidor not in atividades_por_servidor:
-                                                    atividades_por_servidor[servidor] = []
-                                                atividades_por_servidor[servidor].append({
-                                                    "Data": date_str,
-                                                    "Atividade": act["atividade"]
-                                                })
-                                label_da_semana = labels[idx]
-                                ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
-                                supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
-                                pdf_bytes_relatorio = pdf_relatorio.generate_pdf_for_atividades(
-                                    atividades_por_servidor,
-                                    label_da_semana,
-                                    ulsav_name,
-                                    supervisao_name
-                                )
-                                st.session_state[f"pdf_relatorio_{wid}"] = pdf_bytes_relatorio
 
-                    # Exibe os PDFs (programação e relatório) para esta semana
-                    col_pdf1, col_pdf2 = st.columns(2)
-                    with col_pdf1:
-                        if f"pdf_programacao_{wid}" in st.session_state:
-                            st.subheader("Programação (Semana)")
-                            show_pdf_with_fallback(
-                                BytesIO(st.session_state[f"pdf_programacao_{wid}"]),
-                                filename="programacao_semana.pdf"
+                        colA, colB = st.columns([1,1])
+
+                        with colA:
+                            # Gera E BAIXA o PDF no mesmo clique (Programação)
+                            cards_list = []
+                            for day_date in week_dates:
+                                date_str = day_date.strftime("%d/%m/%Y")
+                                day_name_en = day_date.strftime("%A")
+                                day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
+                                day_acts = st.session_state["atividades_dia"].get(date_str, [])
+                                cards_list.append({
+                                    "Dia": day_label,
+                                    "Activities": day_acts
+                                })
+
+                            label_da_semana = labels[idx]
+                            ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
+                            supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+                            pdf_bytes_programacao = generate_pdf_for_week(
+                                cards_list,
+                                label_da_semana,
+                                ulsav_name,
+                                supervisao_name,
+                                plantao
                             )
-                    with col_pdf2:
-                        if f"pdf_relatorio_{wid}" in st.session_state:
-                            st.subheader("Relatório (Semana)")
-                            show_pdf_with_fallback(
-                                BytesIO(st.session_state[f"pdf_relatorio_{wid}"]),
-                                filename="relatorio_semana.pdf"
+
+                            st.download_button(
+                                label="📄 Imprimir Programação",
+                                data=pdf_bytes_programacao,
+                                file_name="programacao_semana.pdf",
+                                mime="application/pdf",
+                                key=f"download_prog_{wid}_{idx}_prog"  # chave única
                             )
-                    
+
+                        with colB:
+                            # Gera E BAIXA o PDF de relatório no mesmo clique
+                            atividades_por_servidor = {}
+                            for date_str, acts in st.session_state["atividades_dia"].items():
+                                for act in acts:
+                                    if act["atividade"] != "Expediente Administrativo":
+                                        for servidor in act["servidores"]:
+                                            if servidor not in atividades_por_servidor:
+                                                atividades_por_servidor[servidor] = []
+                                            atividades_por_servidor[servidor].append({
+                                                "Data": date_str,
+                                                "Atividade": act["atividade"]
+                                            })
+
+                            label_da_semana = labels[idx]
+                            ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
+                            supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+                            pdf_bytes_relatorio = pdf_relatorio.generate_pdf_for_atividades(
+                                atividades_por_servidor,
+                                label_da_semana,
+                                ulsav_name,
+                                supervisao_name
+                            )
+
+                            st.download_button(
+                                label="📝 Imprimir relatório de atividades",
+                                data=pdf_bytes_relatorio,
+                                file_name="relatorio_semana.pdf",
+                                mime="application/pdf",
+                                key=f"download_relatorio_{wid}_{idx}_rel"  # chave única
+                            )
+
                     st.markdown("---")
         else:
             st.info("Programação não cadastrada ainda. Selecione uma data e clique em 'Adicionar Semana'.")
 
-        # ---------------------------------------------------------------------
-        # Impressões Globais (fora do loop de semanas)
-        # ---------------------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # Impressões Globais - Fora do loop
+        # ----------------------------------------------------------------------
         st.subheader("Impressões - Todas as Semanas")
-        if st.button("❌ Limpar Relatórios Globais"):
-            st.session_state.pop("pdf_programacao_all", None)
-            st.session_state.pop("pdf_relatorio_all", None)
-            st.success("PDFs de Programação e Relatório (Todas as Semanas) foram limpos!")
-            st.rerun()
-
         col_global1, col_global2 = st.columns(2)
+
         with col_global1:
-            if st.button("📄 Imprimir Programação (Todas as Semanas)", key="global_imprimir_programacao_all"):
-                # Monta um grande 'cards_list_all' para todas as semanas
+            # Gera e Baixa PDF Programação (Todas as Semanas)
+            if st.button("📄 Gerar Programação (Todas as Semanas)"):
                 cards_list_all = []
                 for w_index, w_id in enumerate(st.session_state["week_order"]):
                     week_dates = st.session_state["semanas"][w_id]
-                    # Título para cada semana
                     cards_list_all.append({
                         "Dia": f"--- {labels[w_index]} ---",
                         "Activities": []
                     })
-                    # Adiciona os dias daquela semana
                     for day_date in week_dates:
                         date_str = day_date.strftime("%d/%m/%Y")
                         day_name_en = day_date.strftime("%A")
@@ -682,30 +605,30 @@ with tab2:
                             "Dia": day_label,
                             "Activities": day_acts
                         })
-                plantao = ""  # Caso queira definir um selectbox global
+
                 all_weeks_label = "Programação de Todas as Semanas"
-                ulsav_name = (
-                    st.session_state["ul_sups"][0]
-                    if st.session_state["ul_sups"]
-                    else "ULSAV não informada"
-                )
-                supervisao_name = (
-                    st.session_state["ul_sups"][1]
-                    if len(st.session_state["ul_sups"]) > 1
-                    else "Supervisão não informada"
-                )
+                ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
+                supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+
                 pdf_bytes_all_prog = generate_pdf_for_week(
                     cards_list_all,
                     all_weeks_label,
                     ulsav_name,
                     supervisao_name,
-                    plantao
+                    ""
                 )
-                st.session_state["pdf_programacao_all"] = pdf_bytes_all_prog
-                st.success("PDF de Programação (todas as semanas) gerado!")
+
+                st.download_button(
+                    label="Baixar Programação (Todas as Semanas)",
+                    data=pdf_bytes_all_prog,
+                    file_name="programacao_todas_semanas.pdf",
+                    mime="application/pdf",
+                    key="download_prog_all"  # Chave única para global
+                )
 
         with col_global2:
-            if st.button("📝 Imprimir Relatório (Todas as Semanas)", key="global_imprimir_relatorio_all"):
+            # Gera e Baixa PDF Relatório (Todas as Semanas)
+            if st.button("📝 Gerar Relatório (Todas as Semanas)"):
                 atividades_por_servidor_all = {}
                 for w_index, w_id in enumerate(st.session_state["week_order"]):
                     week_dates = st.session_state["semanas"][w_id]
@@ -721,42 +644,22 @@ with tab2:
                                         "Data": date_str,
                                         "Atividade": act["atividade"]
                                     })
+
                 all_weeks_label = "Relatório de Atividades (Todas as Semanas)"
-                ulsav_name = (
-                    st.session_state["ul_sups"][0]
-                    if st.session_state["ul_sups"]
-                    else "ULSAV não informada"
-                )
-                supervisao_name = (
-                    st.session_state["ul_sups"][1]
-                    if len(st.session_state["ul_sups"]) > 1
-                    else "Supervisão não informada"
-                )
+                ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
+                supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+
                 pdf_bytes_all_rel = pdf_relatorio.generate_pdf_for_atividades(
                     atividades_por_servidor_all,
                     all_weeks_label,
                     ulsav_name,
                     supervisao_name
                 )
-                st.session_state["pdf_relatorio_all"] = pdf_bytes_all_rel
-                st.success("PDF de Relatório (todas as semanas) gerado!")
-        
-        # Exibe os PDFs globais
-        # st.subheader("Visualização de PDFs - Todas as Semanas")
-        colF1, colF2 = st.columns(2)
 
-        with colF1:
-            if "pdf_programacao_all" in st.session_state:
-                st.subheader("Programação (Todas as Semanas)")
-                show_pdf_with_fallback(
-                    BytesIO(st.session_state["pdf_programacao_all"]),
-                    filename="programacao_todas_semanas.pdf"
-                )
-
-        with colF2:
-            if "pdf_relatorio_all" in st.session_state:
-                st.subheader("Relatório (Todas as Semanas)")
-                show_pdf_with_fallback(
-                    BytesIO(st.session_state["pdf_relatorio_all"]),
-                    filename="relatorio_todas_semanas.pdf"
+                st.download_button(
+                    label="Baixar Relatório (Todas as Semanas)",
+                    data=pdf_bytes_all_rel,
+                    file_name="relatorio_todas_semanas.pdf",
+                    mime="application/pdf",
+                    key="download_relatorio_all"  # Chave única para global
                 )
