@@ -364,6 +364,41 @@ with tab1:
                                      default=st.session_state["all_ul_sups"])
         st.session_state["ul_sups"] = sel_ul_sups
 
+        st.divider()
+        # --- Último uploader e multiselect: Plantão (nome;telefone) ---
+        st.write("### Buscar txt Arquivo de Plantão (Nome e Telefone)")
+        up_plantao = st.file_uploader("Carregue seu arquivo TXT (nome;telefone)", type=["txt"], key="upload_plantao")
+        if up_plantao is not None:
+            content_bytes = up_plantao.read()
+            try:
+                content = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                content = content_bytes.decode("latin-1")
+            lines = content.strip().split("\n")
+            itens_plantao = []
+            for line in lines:
+                parts = line.split(";")
+                if len(parts) == 2:
+                    nome, telefone = parts
+                    itens_plantao.append((nome.strip(), telefone.strip()))
+            st.session_state["plantao_itens"] = itens_plantao
+          
+        else:
+            st.session_state["plantao_itens"] = []
+
+        # Exibir multiselect de nomes somente se houver itens
+        if st.session_state["plantao_itens"]:
+            nomes_disponiveis = [item[0] for item in st.session_state["plantao_itens"]]
+            st.write("### Selecionar Nomes para Plantão")
+            selected_names = st.multiselect(
+                "Selecione os nomes:",
+                nomes_disponiveis,
+                default=nomes_disponiveis,
+                key="selected_plantao_names"
+            )
+        else:
+            selected_names = []
+
 # ------------------------------------------------------------------------------
 # Aba 2: Programação
 # ------------------------------------------------------------------------------
@@ -776,67 +811,341 @@ with tab2:
             )
 
 
+# with tab3:
+#     # Variável global para nomes dos meses (pode ser definida fora, se preferir)
+#     NOME_MESES = {
+#         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+#         5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+#         9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+#     }
+    
+#     def main_tab3():
+#         st.title("Plantão - Recebimento de Vacinas, agrotóxicos e produtos biológicos")
+    
+#         if "unavailable_periods" not in st.session_state:
+#             st.session_state["unavailable_periods"] = {}
+    
+#         # Upload do TXT (nome;telefone)
+#         uploaded_file = st.file_uploader("Carregue seu arquivo TXT (nome;telefone)", type=["txt"])
+#         itens = []
+#         if uploaded_file is not None:
+#             content_bytes = uploaded_file.read()
+#             try:
+#                 content = content_bytes.decode("utf-8")
+#             except UnicodeDecodeError:
+#                 content = content_bytes.decode("latin-1")
+    
+#             lines = content.strip().split("\n")
+#             for line in lines:
+#                 parts = line.split(";")
+#                 if len(parts) == 2:
+#                     nome, telefone = parts
+#                     itens.append((nome.strip(), telefone.strip()))
+    
+#         # Se temos itens, exibir multiselect
+#         if itens:
+#             nomes = [item[0] for item in itens]
+#             selected_names = st.multiselect("Selecione os nomes:", nomes, default=nomes)
+#         else:
+#             selected_names = []
+    
+#         # Expander com a lista geral (opcional)
+#         if itens and selected_names:
+#             with st.expander("Ver tabela selecionada"):
+#                 st.write("Nomes e Telefones selecionados:")
+#                 col1, col2 = st.columns(2)
+#                 col1.header("Nome")
+#                 col2.header("Telefone")
+#                 for nome, telefone in itens:
+#                     if nome in selected_names:
+#                         col1.write(nome)
+#                         col2.write(telefone)
+    
+#         # Tabs para indisponibilidades
+#         if selected_names:
+#             tabs_inner = st.tabs(selected_names)
+#             for i, tab in enumerate(tabs_inner):
+#                 with tab:
+#                     nome_tab = selected_names[i]
+#                     tel_tab = next((tel for nm, tel in itens if nm == nome_tab), "")
+    
+#                     st.write(f"**Nome:** {nome_tab}")
+#                     st.write(f"**Telefone:** {tel_tab}")
+    
+#                     if nome_tab not in st.session_state["unavailable_periods"]:
+#                         st.session_state["unavailable_periods"][nome_tab] = []
+    
+#                     st.subheader("Adicionar Período de Indisponibilidade")
+#                     col_dt1, col_dt2 = st.columns(2)
+#                     with col_dt1:
+#                         inicio = st.date_input("Data de Início", key=f"inicio_{nome_tab}", value=date.today())
+#                     with col_dt2:
+#                         fim = st.date_input("Data de Fim", key=f"fim_{nome_tab}", value=date.today())
+    
+#                     if st.button("Adicionar Período", key=f"btn_{nome_tab}"):
+#                         st.session_state["unavailable_periods"][nome_tab].append((inicio, fim))
+#                         st.success(f"Período adicionado para {nome_tab}.")
+    
+#                     st.write("### Períodos de Indisponibilidade Registrados")
+#                     if st.session_state["unavailable_periods"][nome_tab]:
+#                         for idx, (start_dt, end_dt) in enumerate(st.session_state["unavailable_periods"][nome_tab]):
+#                             colA, colB, colC = st.columns([3, 3, 1])
+#                             colA.write(f"**Início:** {start_dt}")
+#                             colB.write(f"**Fim:** {end_dt}")
+#                             if colC.button("Remover", key=f"remover_{nome_tab}_{idx}"):
+#                                 st.session_state["unavailable_periods"][nome_tab].pop(idx)
+#                                 st.rerun()
+#                     else:
+#                         st.info("Nenhum período cadastrado até o momento.")
+    
+#         st.divider()
+#         st.subheader("Gerar Escala de Plantão (Sábado a Sexta)")
+    
+#         col_cronograma1, col_cronograma2 = st.columns(2)
+#         with col_cronograma1:
+#             data_cronograma_inicio = st.date_input("Data inicial do cronograma", value=date.today())
+#         with col_cronograma2:
+#             data_cronograma_fim = st.date_input("Data final do cronograma", value=date.today())
+    
+#         if st.button("Gerar Escala"):
+#             if not selected_names:
+#                 st.error("Nenhum nome foi selecionado para a escala.")
+#                 return
+#             if data_cronograma_inicio > data_cronograma_fim:
+#                 st.error("A data inicial deve ser anterior ou igual à data final.")
+#                 return
+    
+#             blocos = gerar_blocos_sabado_sexta(
+#                 data_cronograma_inicio,
+#                 data_cronograma_fim,
+#                 selected_names,
+#                 itens,
+#                 st.session_state["unavailable_periods"]
+#             )
+    
+#             if not blocos:
+#                 st.warning("Não foi possível gerar escala (todos indisponíveis ou sem intervalos).")
+#                 return
+    
+#             # Captura o ano da data inicial para usar no título
+#             ano_escalado = data_cronograma_inicio.year
+    
+#             # Gera HTML para imprimir só no iframe
+#             html_iframe = gerar_html_para_iframe(blocos, ano=ano_escalado)
+    
+#             components.html(
+#                 html_iframe,
+#                 height=600,
+#                 scrolling=True
+#             )
+    
+#     # Funções definidas para uso em main_tab3()
+#     def gerar_blocos_sabado_sexta(data_inicio, data_fim, nomes_selecionados, itens, indisponibilidades):
+#         dict_telefones = {nome: tel for (nome, tel) in itens}
+#         blocos = []
+    
+#         sabado_inicial = alinhar_sabado_ou_proximo(data_inicio)
+#         if sabado_inicial > data_fim:
+#             return blocos
+    
+#         idx_servidor = 0
+#         data_corrente = sabado_inicial
+    
+#         while data_corrente <= data_fim:
+#             fim_bloco = data_corrente + timedelta(days=6)
+#             if fim_bloco > data_fim:
+#                 fim_bloco = data_fim
+    
+#             servidor_escolhido = None
+#             tentativas = 0
+#             while tentativas < len(nomes_selecionados):
+#                 nome_atual = nomes_selecionados[idx_servidor]
+#                 if not servidor_indisponivel(nome_atual, data_corrente, fim_bloco, indisponibilidades):
+#                     servidor_escolhido = nome_atual
+#                     idx_servidor = (idx_servidor + 1) % len(nomes_selecionados)
+#                     break
+#                 else:
+#                     idx_servidor = (idx_servidor + 1) % len(nomes_selecionados)
+#                     tentativas += 1
+    
+#             if servidor_escolhido is None:
+#                 blocos.append({
+#                     "start": data_corrente,
+#                     "end": fim_bloco,
+#                     "servidor": "— Sem Servidor —",
+#                     "telefone": ""
+#                 })
+#             else:
+#                 tel = dict_telefones.get(servidor_escolhido, "")
+#                 blocos.append({
+#                     "start": data_corrente,
+#                     "end": fim_bloco,
+#                     "servidor": servidor_escolhido,
+#                     "telefone": tel
+#                 })
+    
+#             data_corrente = fim_bloco + timedelta(days=1)
+#             data_corrente = alinhar_sabado_ou_proximo(data_corrente)
+    
+#         return blocos
+    
+#     def alinhar_sabado_ou_proximo(data_ref):
+#         dia_semana = data_ref.weekday()
+#         if dia_semana <= 5:
+#             diff = 5 - dia_semana
+#         else:
+#             diff = 6
+#         return data_ref + timedelta(days=diff)
+    
+#     def servidor_indisponivel(nome_servidor, ini_bloco, fim_bloco, indisponibilidades):
+#         if nome_servidor not in indisponibilidades:
+#             return False
+#         for (ini_indisp, fim_indisp) in indisponibilidades[nome_servidor]:
+#             if not (fim_bloco < ini_indisp or ini_bloco > fim_indisp):
+#                 return True
+#         return False
+    
+#     def gerar_html_para_iframe(blocos, ano):
+#         grupos = agrupar_blocos_mensalmente(blocos)
+#         html_head = f"""
+#         <html>
+#         <head>
+#         <meta charset="UTF-8">
+#         <style>
+#             body {{
+#                 font-family: "Helvetica", sans-serif;
+#             }}
+#             table {{
+#                 border-collapse: collapse;
+#                 width: 100%;
+#                 margin-bottom: 20px;
+#             }}
+#             th, td {{
+#                 border: 1px solid #999;
+#                 padding: 6px 10px;
+#                 text-align: left;
+#             }}
+#             h2 {{
+#                 margin-top: 30px;
+#             }}
+#             @media print {{
+#                 #printButton {{
+#                     display: none;
+#                 }}
+#             }}
+#         </style>
+#         <script>
+#             function printIframe() {{
+#                 window.print();
+#             }}
+#         </script>
+#         </head>
+#         <body>
+#         <h3>Escala de Plantão ({ano})</h3>
+#         """
+#         html_body = ""
+#         chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
+#         for (year, month) in chaves_ordenadas:
+#             nome_mes = NOME_MESES[month]
+#             html_body += f'<h2>{nome_mes} de {year}</h2>\n'
+#             html_body += '<table>\n'
+#             html_body += '<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
+#             for item in grupos[(year, month)]:
+#                 data_str = item["Data"]
+#                 servidor = item["Servidor"]
+#                 contato = item["Contato"]
+#                 html_body += f"<tr><td>{data_str}</td><td>{servidor}</td><td>{contato}</td></tr>\n"
+#             html_body += '</table>\n'
+    
+#         html_body += """
+#         <button id="printButton" onclick="printIframe()">Imprimir</button>
+#         """
+    
+#         html_end = """
+#         </body>
+#         </html>
+#         """
+#         return html_head + html_body + html_end
+    
+#     def agrupar_blocos_mensalmente(blocos):
+#         grupos = {}
+#         for bloco in blocos:
+#             dt_start = bloco["start"]
+#             dt_end = bloco["end"]
+#             servidor = bloco["servidor"]
+#             telefone = bloco["telefone"]
+    
+#             y = dt_start.year
+#             m = dt_start.month
+    
+#             data_str = (f"Do dia {dt_start.strftime('%d/%m/%Y')} "
+#                         f"ao dia {dt_end.strftime('%d/%m/%Y')}")
+    
+#             if (y, m) not in grupos:
+#                 grupos[(y, m)] = []
+#             grupos[(y, m)].append({
+#                 "Data": data_str,
+#                 "Servidor": servidor,
+#                 "Contato": telefone
+#             })
+    
+#         return grupos
+    
+#     # Chama a função principal para Tab3
+#     main_tab3()
+
 with tab3:
-    # Variável global para nomes dos meses (pode ser definida fora, se preferir)
+    # Variável global para nomes dos meses
     NOME_MESES = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
         5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
         9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
+    if "unavailable_periods" not in st.session_state:
+       st.session_state["unavailable_periods"] = {}
+
     
     def main_tab3():
         st.title("Plantão - Recebimento de Vacinas, agrotóxicos e produtos biológicos")
     
-        if "unavailable_periods" not in st.session_state:
-            st.session_state["unavailable_periods"] = {}
+        # Verifica se os dados de plantão foram carregados na aba 1
+        if "plantao_itens" not in st.session_state or not st.session_state["plantao_itens"]:
+            st.warning("Nenhum arquivo (nome;telefone) foi carregado na aba 1. Por favor, carregue-o e selecione os nomes antes de prosseguir.")
+            return
+        
+        if "selected_plantao_names" not in st.session_state or not st.session_state["selected_plantao_names"]:
+            st.warning("Nenhum nome foi selecionado para Plantão na aba 1. Por favor, selecione os nomes antes de prosseguir.")
+            return
+        
+        itens = st.session_state["plantao_itens"]
+        selected_names = st.session_state["selected_plantao_names"]
     
-        # Upload do TXT (nome;telefone)
-        uploaded_file = st.file_uploader("Carregue seu arquivo TXT (nome;telefone)", type=["txt"])
-        itens = []
-        if uploaded_file is not None:
-            content_bytes = uploaded_file.read()
-            try:
-                content = content_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                content = content_bytes.decode("latin-1")
+        # Exibe tabela com os dados carregados (opcional)
+        with st.expander("Ver tabela selecionada"):
+            col1, col2 = st.columns(2)
+            col1.header("Nome")
+            col2.header("Telefone")
+            for nome, telefone in itens:
+                if nome in selected_names:
+                    col1.write(nome)
+                    col2.write(telefone)
     
-            lines = content.strip().split("\n")
-            for line in lines:
-                parts = line.split(";")
-                if len(parts) == 2:
-                    nome, telefone = parts
-                    itens.append((nome.strip(), telefone.strip()))
+        st.divider()
+        st.subheader("Indisponibilidades")
     
-        # Se temos itens, exibir multiselect
-        if itens:
-            nomes = [item[0] for item in itens]
-            selected_names = st.multiselect("Selecione os nomes:", nomes, default=nomes)
-        else:
-            selected_names = []
-    
-        # Expander com a lista geral (opcional)
-        if itens and selected_names:
-            with st.expander("Ver tabela selecionada"):
-                st.write("Nomes e Telefones selecionados:")
-                col1, col2 = st.columns(2)
-                col1.header("Nome")
-                col2.header("Telefone")
-                for nome, telefone in itens:
-                    if nome in selected_names:
-                        col1.write(nome)
-                        col2.write(telefone)
-    
-        # Tabs para indisponibilidades
+        # Cria abas (tabs) para cada nome selecionado
         if selected_names:
             tabs_inner = st.tabs(selected_names)
             for i, tab in enumerate(tabs_inner):
                 with tab:
                     nome_tab = selected_names[i]
-                    tel_tab = next((tel for nm, tel in itens if nm == nome_tab), "")
+                    # Procura o telefone correspondente
+                    tel_tab = next((tel for nm, tel in itens if nm == nome_tab), "Sem Telefone")
     
                     st.write(f"**Nome:** {nome_tab}")
                     st.write(f"**Telefone:** {tel_tab}")
     
+                    # Inicializa a lista de períodos se necessário
                     if nome_tab not in st.session_state["unavailable_periods"]:
                         st.session_state["unavailable_periods"][nome_tab] = []
     
@@ -868,18 +1177,16 @@ with tab3:
     
         col_cronograma1, col_cronograma2 = st.columns(2)
         with col_cronograma1:
-            data_cronograma_inicio = st.date_input("Data inicial do cronograma", value=date.today())
+            data_cronograma_inicio = st.date_input("Data inicial do cronograma", value=date.today(), key="cronograma_inicio")
         with col_cronograma2:
-            data_cronograma_fim = st.date_input("Data final do cronograma", value=date.today())
+            data_cronograma_fim = st.date_input("Data final do cronograma", value=date.today(), key="cronograma_fim")
     
         if st.button("Gerar Escala"):
-            if not selected_names:
-                st.error("Nenhum nome foi selecionado para a escala.")
-                return
             if data_cronograma_inicio > data_cronograma_fim:
                 st.error("A data inicial deve ser anterior ou igual à data final.")
                 return
     
+            # Chame sua função para gerar blocos (escalas) com base nos dados
             blocos = gerar_blocos_sabado_sexta(
                 data_cronograma_inicio,
                 data_cronograma_fim,
@@ -895,7 +1202,7 @@ with tab3:
             # Captura o ano da data inicial para usar no título
             ano_escalado = data_cronograma_inicio.year
     
-            # Gera HTML para imprimir só no iframe
+            # Gera HTML para imprimir somente no iframe
             html_iframe = gerar_html_para_iframe(blocos, ano=ano_escalado)
     
             components.html(
@@ -904,7 +1211,7 @@ with tab3:
                 scrolling=True
             )
     
-    # Funções definidas para uso em main_tab3()
+    # Definição das funções auxiliares para a aba 3
     def gerar_blocos_sabado_sexta(data_inicio, data_fim, nomes_selecionados, itens, indisponibilidades):
         dict_telefones = {nome: tel for (nome, tel) in itens}
         blocos = []
@@ -1006,7 +1313,7 @@ with tab3:
         </script>
         </head>
         <body>
-        <h3>Escala de Plantão ({ano})</h3>
+        <h3>Escala de Plantão IDARON para recebimento de vacinas agrotóxicos e produtos biológicos ({ano})</h3>
         """
         html_body = ""
         chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
@@ -1056,8 +1363,6 @@ with tab3:
     
         return grupos
     
-    # Chama a função principal para Tab3
     main_tab3()
-
 
     
