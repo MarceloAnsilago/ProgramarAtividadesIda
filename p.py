@@ -613,12 +613,12 @@ with tab2:
                             day_name_pt = dias_semana.get(day_name_en, day_name_en)
 
                             # Exibe o título do dia
-                            st.markdown(f"### {day_name_pt} - {ds}")
+                            st.markdown(f"##### {day_name_pt} - {ds}")
 
                             day_acts = st.session_state["atividades_dia"].get(ds, [])
                             if day_acts:
                                 for act_idx, atividade in enumerate(day_acts):
-                                    st.markdown(f"#### Atividade: {atividade['atividade']}")
+                                    st.markdown(f"##### Atividade: {atividade['atividade']}")
                                     if atividade["atividade"] != "Expediente Administrativo":
                                         activity_checked = st.checkbox(
                                             f"Marcar atividade: {atividade['atividade']}",
@@ -663,7 +663,7 @@ with tab2:
                     # ===================== IMPRESSÃO: Semana Atual =====================
                     report_col1, report_col2, report_col3 = st.columns([1,2,1])
                     with report_col2:
-                        st.write("### Impressões")
+                        st.write("#### Impressões")
                         st.markdown("""
                         <style>
                         button[data-testid="stButton"] {
