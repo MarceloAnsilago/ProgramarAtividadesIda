@@ -7,7 +7,6 @@ from reportlab.lib.pagesizes import LETTER
 import pdf_relatorio
 from pdf_utils import generate_pdf_for_week
 import streamlit.components.v1 as components
-from datetime import date, timedelta
 import pandas as pd
 # ------------------------------------------------------------------------------
 # Configuração inicial e título
@@ -149,7 +148,7 @@ def add_week_if_not_exists(ref_date, include_saturday=False, include_sunday=Fals
             add_activity_to_date(
                 day_date,
                 atividade="Expediente Administrativo",
-                servidores=st.session_state["servidores"],
+                servidores=[s for s in st.session_state["servidores"]],
                 veiculo="Nenhum"
             )
 
@@ -170,11 +169,15 @@ def add_server_to_expediente(date_str, server):
                 act["servidores"].append(server)
             return
 
+
 def remove_server_from_card(date_str, card_index, server):
     card = st.session_state["atividades_dia"][date_str][card_index]
-    if server in card["servidores"]:
-        card["servidores"].remove(server)
-        add_server_to_expediente(date_str, server)
+    if card["atividade"] != "Expediente Administrativo":
+        if server in card["servidores"]:
+            card["servidores"].remove(server)
+            add_server_to_expediente(date_str, server)
+
+
 
 def remove_activity_card(date_str, card_index):
     card = st.session_state["atividades_dia"][date_str][card_index]
@@ -211,15 +214,97 @@ def get_summary_details_for_week(week_id):
     for day_date in week_dates:
         date_str = day_date.strftime("%d/%m/%Y")
         day_acts = st.session_state["atividades_dia"].get(date_str, [])
-        for act in day_acts:
+        for act_idx, act in enumerate(day_acts):
             if act["atividade"] != "Expediente Administrativo":
                 activities[act["atividade"]] = activities.get(act["atividade"], 0) + 1
                 for s in act["servidores"]:
-                    servers[s] = servers.get(s, 0) + 1
+                    key_server = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
+                    if st.session_state.get(key_server, True):
+                        servers[s] = servers.get(s, 0) + 1
                 if act["veiculo"] and act["veiculo"] != "Nenhum":
                     vehicles[act["veiculo"]] = vehicles.get(act["veiculo"], 0) + 1
     return activities, servers, vehicles
 
+
+# --------------------------------------------------
+# FUNÇÕES AUXILIARES PARA IMPRESSÃO
+# --------------------------------------------------
+def build_cards_list(week_dates):
+    """
+    Retorna uma lista de dias (cards_list), onde cada dia contém apenas
+    as atividades e servidores que estão marcados nos checkboxes.
+    """
+    cards_list = []
+    for day_date in week_dates:
+        date_str = day_date.strftime("%d/%m/%Y")
+        day_name_en = day_date.strftime("%A")
+        day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
+
+        day_acts = st.session_state["atividades_dia"].get(date_str, [])
+        filtered_acts = []
+
+        for act_idx, act in enumerate(day_acts):
+            # 1) Se a atividade NÃO for "Expediente Administrativo", verificar se o checkbox da atividade está marcado
+            if act["atividade"] != "Expediente Administrativo":
+                act_key = f"checkbox_atividade_{date_str}_{act_idx}"
+                if not st.session_state.get(act_key, True):
+                    # Se estiver desmarcada, pula essa atividade
+                    continue
+
+            # 2) Filtrar servidores marcados
+            filtered_servers = []
+            for s in act["servidores"]:
+                server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
+                # Se o checkbox do servidor estiver marcado (ou não existir, por padrão True), inclui
+                if st.session_state.get(server_key, True):
+                    filtered_servers.append(s)
+
+            # Se não for Exp. Administrativo e não sobrou nenhum servidor, podemos pular
+            if act["atividade"] != "Expediente Administrativo" and not filtered_servers:
+                continue
+
+            # Monta uma nova atividade com os servidores filtrados
+            new_act = {
+                "atividade": act["atividade"],
+                "servidores": filtered_servers,
+                "veiculo": act["veiculo"]
+            }
+            filtered_acts.append(new_act)
+
+        cards_list.append({
+            "Dia": day_label,
+            "Activities": filtered_acts
+        })
+    return cards_list
+
+
+def build_atividades_por_servidor(week_dates):
+    """
+    Retorna um dicionário {servidor: [lista de atividades]} apenas com
+    o que estiver marcado nos checkboxes (e ignorando "Expediente Administrativo").
+    """
+    atividades_por_servidor = {}
+    for day_date in week_dates:
+        date_str = day_date.strftime("%d/%m/%Y")
+        day_acts = st.session_state["atividades_dia"].get(date_str, [])
+        for act_idx, act in enumerate(day_acts):
+            if act["atividade"] != "Expediente Administrativo":
+                # Verifica se a atividade está marcada
+                act_key = f"checkbox_atividade_{date_str}_{act_idx}"
+                if not st.session_state.get(act_key, True):
+                    continue  # pula se a atividade foi desmarcada
+
+                # Filtra servidores marcados
+                for s in act["servidores"]:
+                    server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
+                    if st.session_state.get(server_key, True):
+                        if s not in atividades_por_servidor:
+                            atividades_por_servidor[s] = []
+                        atividades_por_servidor[s].append({
+                            "Data": date_str,
+                            "Atividade": act["atividade"]
+                        })
+    return atividades_por_servidor
 
 # ------------------------------------------------------------------------------
 # Layout com Abas
@@ -282,11 +367,91 @@ with tab1:
 # ------------------------------------------------------------------------------
 # Aba 2: Programação
 # ------------------------------------------------------------------------------
+# ======================================================
+# FUNÇÕES AUXILIARES PARA IMPRESSÃO
+# ======================================================
+def build_cards_list(week_dates):
+    """
+    Monta a lista de cards (dia a dia) para a impressão,
+    filtrando as atividades e servidores com base no estado dos checkboxes.
+    """
+    cards_list = []
+    for day_date in week_dates:
+        date_str = day_date.strftime("%d/%m/%Y")
+        day_name_en = day_date.strftime("%A")
+        day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
+        
+        day_acts = st.session_state["atividades_dia"].get(date_str, [])
+        filtered_acts = []
+        for act_idx, act in enumerate(day_acts):
+            # Para atividades diferentes de "Expediente Administrativo",
+            # verificamos se o checkbox da atividade está marcado.
+            if act["atividade"] != "Expediente Administrativo":
+                act_key = f"checkbox_atividade_{date_str}_{act_idx}"
+                if not st.session_state.get(act_key, True):
+                    continue  # ignora atividade desmarcada
+            
+            # Filtra servidores: inclui apenas os que estiverem marcados.
+            filtered_servers = []
+            for s in act["servidores"]:
+                server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
+                if st.session_state.get(server_key, True):
+                    filtered_servers.append(s)
+            # Se não for Expediente e não houver servidores, ignora a atividade
+            if act["atividade"] != "Expediente Administrativo" and not filtered_servers:
+                continue
+
+            new_act = {
+                "atividade": act["atividade"],
+                "servidores": filtered_servers,
+                "veiculo": act["veiculo"]
+            }
+            filtered_acts.append(new_act)
+        cards_list.append({
+            "Dia": day_label,
+            "Activities": filtered_acts
+        })
+    return cards_list
+
+
+def build_atividades_por_servidor(week_dates):
+    """
+    Monta um dicionário {servidor: [lista de atividades]} para a impressão,
+    considerando somente atividades e servidores com checkbox marcado.
+    """
+    atividades_por_servidor = {}
+    for day_date in week_dates:
+        date_str = day_date.strftime("%d/%m/%Y")
+        day_acts = st.session_state["atividades_dia"].get(date_str, [])
+        for act_idx, act in enumerate(day_acts):
+            if act["atividade"] != "Expediente Administrativo":
+                act_key = f"checkbox_atividade_{date_str}_{act_idx}"
+                if not st.session_state.get(act_key, True):
+                    continue  # atividade desmarcada
+                for s in act["servidores"]:
+                    server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
+                    if st.session_state.get(server_key, True):
+                        if s not in atividades_por_servidor:
+                            atividades_por_servidor[s] = []
+                        atividades_por_servidor[s].append({
+                            "Data": date_str,
+                            "Atividade": act["atividade"]
+                        })
+    return atividades_por_servidor
+
+
+# ===================== INÍCIO DA ABA 2 =====================
 with tab2:
     st.header("Programação de Atividades")
     if (not st.session_state["servidores"]) or (not st.session_state["atividades"]) or (not st.session_state["veiculos"]):
         st.warning("Carregue e selecione Servidores, Atividades e Veículos na aba 'Dados'.")
     else:
+        # Atualiza os cartões de "Expediente Administrativo" (mantém apenas os servidores ativos)
+        for ds, atividades in st.session_state.get("atividades_dia", {}).items():
+            for atividade in atividades:
+                if atividade["atividade"] == "Expediente Administrativo":
+                    atividade["servidores"] = [s for s in atividade["servidores"] if s in st.session_state["servidores"]]
+
         st.write("Selecione uma data para criar (ou visualizar) a semana correspondente:")
         selected_date = st.date_input("Data para a semana:", value=date.today())
 
@@ -304,8 +469,7 @@ with tab2:
         st.markdown("---")
 
         if st.session_state["week_order"]:
-            # Gera rótulos no formato "Primeira semana do mês de março" etc.
-            month_weeks_count = {}
+            # Gera os rótulos das semanas
             labels = []
             for wid in st.session_state["week_order"]:
                 week_dates = st.session_state["semanas"][wid]
@@ -316,30 +480,22 @@ with tab2:
                 first_date = week_dates[0]
                 year = first_date.year
                 month = first_date.month
-
-                # Semana da data no calendário
                 _, week_number = first_date.isocalendar()[:2]
-
-                # Encontrar primeira semana ISO do mês
                 first_day_of_month = date(year, month, 1)
                 _, first_week_number = first_day_of_month.isocalendar()[:2]
-
                 week_position_in_month = week_number - first_week_number + 1
                 if week_position_in_month < 1:
-                    week_position_in_month = 1  # segurança em caso de bordas entre anos
-
+                    week_position_in_month = 1
                 ordinal_name = get_ordinal_week_in_month(week_position_in_month)
                 month_name_pt = month_map_pt[month]
-                label = f"{ordinal_name} semana do mês de {month_name_pt}"
-                labels.append(label)
+                labels.append(f"{ordinal_name} semana do mês de {month_name_pt}")
 
             weeks_tabs = st.tabs(labels)
 
             for idx, wid in enumerate(st.session_state["week_order"]):
                 with weeks_tabs[idx]:
-                    st.markdown(f"## {labels[idx]}")
-
-                    # Linha superior: 3 colunas -> Excluir Semana | Formulário | Resumo
+                    st.markdown(f"##### {labels[idx]}")
+                    # Linha superior: Excluir Semana | Formulário para adicionar atividade | Resumo visual
                     top_col1, top_col2, top_col3 = st.columns([1,1,1])
 
                     with top_col1:
@@ -355,14 +511,14 @@ with tab2:
                     with top_col2:
                         chosen_day = st.selectbox("Selecione o dia", day_options, key=f"dia_select_{wid}")
                         chosen_date = option_to_date[chosen_day]
-                        st.write(f"### Adicionar Nova Atividade ({chosen_day})")
+                        st.write(f"#### Adicionar Nova Atividade ({chosen_day})")
 
-                        # Servidores já alocados no dia (exceto Expediente)
+                        # Função para obter os servidores já alocados no dia (exceto Expediente)
                         def get_alocados_no_dia(chosen_date):
-                            date_str = chosen_date.strftime("%d/%m/%Y")
+                            ds = chosen_date.strftime("%d/%m/%Y")
                             alocados = set()
-                            if date_str in st.session_state["atividades_dia"]:
-                                for act in st.session_state["atividades_dia"][date_str]:
+                            if ds in st.session_state["atividades_dia"]:
+                                for act in st.session_state["atividades_dia"][ds]:
                                     if act["atividade"] != "Expediente Administrativo":
                                         for s in act["servidores"]:
                                             alocados.add(s)
@@ -389,123 +545,122 @@ with tab2:
                                 placeholder="Selecione um ou mais servidores..."
                             )
                             veiculo_escolhido = st.selectbox("Veículo", st.session_state["veiculos"])
-
                             if st.form_submit_button("➕Adicionar Atividade"):
-                                date_str = chosen_date.strftime("%d/%m/%Y")
-                                if date_str in st.session_state["atividades_dia"]:
-                                    for a_idx, act in enumerate(st.session_state["atividades_dia"][date_str]):
+                                ds = chosen_date.strftime("%d/%m/%Y")
+                                if ds in st.session_state["atividades_dia"]:
+                                    for a_idx, act in enumerate(st.session_state["atividades_dia"][ds]):
                                         if act["atividade"] == "Expediente Administrativo":
-                                            # Remove esses servidores do Expediente
                                             act["servidores"] = [s for s in act["servidores"] if s not in servidores_escolhidos]
                                             break
                                 add_activity_to_date(chosen_date, atividade_escolhida, servidores_escolhidos, veiculo_escolhido)
                                 st.rerun()
 
                     with top_col3:
-                        # Resumo da semana
+                        # Resumo visual da semana
                         dias_com_atividades = []
                         for d in week_dates:
-                            date_str = d.strftime("%d/%m/%Y")
+                            ds = d.strftime("%d/%m/%Y")
                             day_name_pt = dias_semana.get(d.strftime("%A"), d.strftime("%A"))
-                            acts = st.session_state["atividades_dia"].get(date_str, [])
+                            acts = st.session_state["atividades_dia"].get(ds, [])
                             if any(act["atividade"] != "Expediente Administrativo" for act in acts):
                                 dias_com_atividades.append(day_name_pt)
                         dias_label = "<br>".join(dias_com_atividades) if dias_com_atividades else "Nenhum"
-
                         activities_summary, servers_summary, vehicles_summary = get_summary_details_for_week(wid)
+
                         summary_html = f"""
                         <div class="summary-card">
                           <strong>Resumo da Semana</strong>
                           <div class="summary-flex">
                             <div class="summary-column">
-                              <u>Dia:</u><br>
-                              {dias_label}
+                              <u>Dia:</u><br>{dias_label}
                             </div>
                             <div class="summary-column">
-                              <u>Atividades:</u><br>
-                        """
+                              <u>Atividades:</u><br>"""
                         if activities_summary:
                             for act, count in activities_summary.items():
                                 summary_html += f"{act}: {count}<br>"
                         else:
                             summary_html += "Nenhuma<br>"
-                        summary_html += """
-                            </div>
+                        summary_html += """</div>
                             <div class="summary-column">
-                              <u>Servidores:</u><br>
-                        """
+                              <u>Servidores:</u><br>"""
                         if servers_summary:
                             for serv, count in servers_summary.items():
                                 summary_html += f"{serv}: {count}<br>"
                         else:
                             summary_html += "Nenhum<br>"
-                        summary_html += """
-                            </div>
+                        summary_html += """</div>
                             <div class="summary-column">
-                              <u>Veículos:</u><br>
-                        """
+                              <u>Veículos:</u><br>"""
                         if vehicles_summary:
                             for veic, count in vehicles_summary.items():
                                 summary_html += f"{veic}: {count}<br>"
                         else:
                             summary_html += "Nenhum<br>"
-                        summary_html += """
-                            </div>
+                        summary_html += """</div>
                           </div>
-                        </div>
-                        """
+                        </div>"""
                         st.markdown(summary_html, unsafe_allow_html=True)
 
                     st.markdown("---")
 
-                    # Listagem das atividades de cada dia
+                    # =========== Listagem das atividades (um bloco por dia) ===========
                     cols = st.columns(len(week_dates))
                     for j, current_date in enumerate(week_dates):
                         with cols[j]:
+                            ds = current_date.strftime("%d/%m/%Y")
                             day_name_en = current_date.strftime("%A")
                             day_name_pt = dias_semana.get(day_name_en, day_name_en)
-                            date_str = current_date.strftime("%d/%m/%Y")
 
-                            st.markdown(f"<div class='day-title'>{day_name_pt} - {date_str}</div>", unsafe_allow_html=True)
+                            # Exibe o título do dia
+                            st.markdown(f"### {day_name_pt} - {ds}")
 
-                            day_acts = st.session_state["atividades_dia"].get(date_str, [])
+                            day_acts = st.session_state["atividades_dia"].get(ds, [])
                             if day_acts:
                                 for act_idx, atividade in enumerate(day_acts):
-                                    form_key = f"form_{date_str}_{act_idx}"
-                                    with st.form(key=form_key):
-                                        if atividade["atividade"] == "Expediente Administrativo":
-                                            st.write("**Atividade: Expediente Administrativo**")
-                                            activity_checked = True
-                                        else:
-                                            activity_checked = st.checkbox(
-                                                f"Atividade: {atividade['atividade']}",
-                                                value=True,
-                                                key=f"checkbox_{date_str}_{act_idx}"
-                                            )
-
-                                        st.write("Servidores: (desmarque para remover)")
-                                        server_states = {}
-                                        for s in atividade["servidores"]:
-                                            server_states[s] = st.checkbox(
-                                                s, value=True, key=f"{date_str}_{act_idx}_{s}"
-                                            )
-
-                                        st.write(f"**Veículo:** {atividade['veiculo']}")
-
-                                        if st.form_submit_button("🔄Atualizar"):
-                                            if atividade["atividade"] != "Expediente Administrativo":
-                                                if not activity_checked:
-                                                    remove_activity_card(date_str, act_idx)
-                                                    st.rerun()
-
-                                            for s_name, checked in server_states.items():
-                                                if not checked:
-                                                    remove_server_from_card(date_str, act_idx, s_name)
+                                    st.markdown(f"#### Atividade: {atividade['atividade']}")
+                                    if atividade["atividade"] != "Expediente Administrativo":
+                                        activity_checked = st.checkbox(
+                                            f"Marcar atividade: {atividade['atividade']}",
+                                            value=True,
+                                            key=f"checkbox_atividade_{ds}_{act_idx}",
+                                            help="Desmarque para remover essa atividade."
+                                        )
+                                        if not activity_checked:
+                                            remove_activity_card(ds, act_idx)
                                             st.rerun()
+
+                                        st.write("Servidores: (desmarque para remover da atividade e voltar para Expediente Administrativo)")
+                                        for s in atividade["servidores"][:]:
+                                            key_server = f"checkbox_servidor_{ds}_{act_idx}_{s}"
+                                            server_checked = st.checkbox(
+                                                s,
+                                                value=True,
+                                                key=key_server,
+                                                help="Desmarque para remover da atividade e retornar ao Expediente Administrativo."
+                                            )
+                                            if not server_checked:
+                                                remove_server_from_card(ds, act_idx, s)
+                                                st.rerun()
+                                    else:
+                                        st.write("Servidores: (desmarque para não incluir na impressão)")
+                                        for s in atividade["servidores"]:
+                                            key_server = f"checkbox_servidor_{ds}_{act_idx}_{s}"
+                                            st.checkbox(
+                                                s,
+                                                value=True,
+                                                key=key_server,
+                                                help="Desmarque para não incluir este servidor na impressão."
+                                            )
+
+                                    st.write(f"**Veículo:** {atividade['veiculo']}")
+                                    st.markdown("---")
+                            else:
+                                st.write("Nenhuma atividade para este dia.")
 
                     st.markdown('<hr class="full-width-hr">', unsafe_allow_html=True)
 
-                    # Impressões individuais (semana)
+                    # ===================== IMPRESSÃO: Semana Atual =====================
                     report_col1, report_col2, report_col3 = st.columns([1,2,1])
                     with report_col2:
                         st.write("### Impressões")
@@ -519,7 +674,6 @@ with tab2:
                         </style>
                         """, unsafe_allow_html=True)
 
-                        # Campo de plantão
                         plantao = st.selectbox(
                             "Plantão para recebimento de vacinas e agrotóxicos",
                             options=st.session_state["servidores"],
@@ -527,158 +681,99 @@ with tab2:
                         )
 
                         colA, colB = st.columns([1,1])
-
                         with colA:
-                            # Gera E BAIXA o PDF no mesmo clique (Programação)
-                            cards_list = []
-                            for day_date in week_dates:
-                                date_str = day_date.strftime("%d/%m/%Y")
-                                day_name_en = day_date.strftime("%A")
-                                day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
-                                day_acts = st.session_state["atividades_dia"].get(date_str, [])
-                                cards_list.append({
-                                    "Dia": day_label,
-                                    "Activities": day_acts
-                                })
-
-                            label_da_semana = labels[idx]
-                            ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
-                            supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+                            # Usa a função build_cards_list para filtrar somente itens marcados
+                            cards_list = build_cards_list(week_dates)
                             pdf_bytes_programacao = generate_pdf_for_week(
                                 cards_list,
-                                label_da_semana,
-                                ulsav_name,
-                                supervisao_name,
+                                labels[idx],
+                                st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada",
+                                st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada",
                                 plantao
                             )
-
                             st.download_button(
                                 label="📄 Imprimir Programação",
                                 data=pdf_bytes_programacao,
                                 file_name="programacao_semana.pdf",
                                 mime="application/pdf",
-                                key=f"download_prog_{wid}_{idx}_prog"  # chave única
+                                key=f"download_prog_{wid}_{idx}_prog"
                             )
-
                         with colB:
-                            # Gera E BAIXA o PDF de relatório no mesmo clique
-                            atividades_por_servidor = {}
-                            for date_str, acts in st.session_state["atividades_dia"].items():
-                                for act in acts:
-                                    if act["atividade"] != "Expediente Administrativo":
-                                        for servidor in act["servidores"]:
-                                            if servidor not in atividades_por_servidor:
-                                                atividades_por_servidor[servidor] = []
-                                            atividades_por_servidor[servidor].append({
-                                                "Data": date_str,
-                                                "Atividade": act["atividade"]
-                                            })
-
-                            label_da_semana = labels[idx]
-                            ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
-                            supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+                            # Usa a função build_atividades_por_servidor para filtrar atividades por servidor
+                            atividades_por_servidor = build_atividades_por_servidor(week_dates)
                             pdf_bytes_relatorio = pdf_relatorio.generate_pdf_for_atividades(
                                 atividades_por_servidor,
-                                label_da_semana,
-                                ulsav_name,
-                                supervisao_name
+                                labels[idx],
+                                st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada",
+                                st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
                             )
-
                             st.download_button(
                                 label="📝 Imprimir relatório de atividades",
                                 data=pdf_bytes_relatorio,
                                 file_name="relatorio_semana.pdf",
                                 mime="application/pdf",
-                                key=f"download_relatorio_{wid}_{idx}_rel"  # chave única
+                                key=f"download_relatorio_{wid}_{idx}_rel"
                             )
-
                     st.markdown("---")
         else:
             st.info("Programação não cadastrada ainda. Selecione uma data e clique em 'Adicionar Semana'.")
 
+    # ===================== IMPRESSÕES - Todas as Semanas =====================
+    st.subheader("Impressões - Todas as Semanas")
+    col_global1, col_global2 = st.columns(2)
 
-        st.subheader("Impressões - Todas as Semanas")
-        col_global1, col_global2 = st.columns(2)
+    with col_global1:
+        if st.button("📄 Gerar Programação (Todas as Semanas)"):
+            cards_list_all = []
+            for w_index, w_id in enumerate(st.session_state["week_order"]):
+                week_dates_all = st.session_state["semanas"][w_id]
+                cards_list_all.append({
+                    "Dia": f"--- {labels[w_index]} ---",
+                    "Activities": []
+                })
+                filtered = build_cards_list(week_dates_all)
+                cards_list_all.extend(filtered)
+            all_weeks_label = "Programação de Todas as Semanas"
+            pdf_bytes_all_prog = generate_pdf_for_week(
+                cards_list_all,
+                all_weeks_label,
+                st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada",
+                st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada",
+                ""
+            )
+            st.download_button(
+                label="Baixar Programação (Todas as Semanas)",
+                data=pdf_bytes_all_prog,
+                file_name="programacao_todas_semanas.pdf",
+                mime="application/pdf",
+                key="download_prog_all"
+            )
 
-        with col_global1:
-                # Gera e Baixa PDF Programação (Todas as Semanas)
-                if st.button("📄 Gerar Programação (Todas as Semanas)"):
-                    cards_list_all = []
-                    for w_index, w_id in enumerate(st.session_state["week_order"]):
-                        week_dates = st.session_state["semanas"][w_id]
-                        cards_list_all.append({
-                            "Dia": f"--- {labels[w_index]} ---",
-                            "Activities": []
-                        })
-                        for day_date in week_dates:
-                            date_str = day_date.strftime("%d/%m/%Y")
-                            day_name_en = day_date.strftime("%A")
-                            day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
-                            day_acts = st.session_state["atividades_dia"].get(date_str, [])
-                            cards_list_all.append({
-                                "Dia": day_label,
-                                "Activities": day_acts
-                            })
+    with col_global2:
+        if st.button("📝 Gerar Relatório (Todas as Semanas)"):
+            atividades_por_servidor_all = {}
+            for w_index, w_id in enumerate(st.session_state["week_order"]):
+                week_dates_all = st.session_state["semanas"][w_id]
+                parcial = build_atividades_por_servidor(week_dates_all)
+                for servidor, lista_ativ in parcial.items():
+                    if servidor not in atividades_por_servidor_all:
+                        atividades_por_servidor_all[servidor] = []
+                    atividades_por_servidor_all[servidor].extend(lista_ativ)
 
-                    all_weeks_label = "Programação de Todas as Semanas"
-                    ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
-                    supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
-
-                    pdf_bytes_all_prog = generate_pdf_for_week(
-                        cards_list_all,
-                        all_weeks_label,
-                        ulsav_name,
-                        supervisao_name,
-                        ""
-                    )
-
-                    st.download_button(
-                        label="Baixar Programação (Todas as Semanas)",
-                        data=pdf_bytes_all_prog,
-                        file_name="programacao_todas_semanas.pdf",
-                        mime="application/pdf",
-                        key="download_prog_all"  # Chave única para global
-                    )
-
-        with col_global2:
-                # Gera e Baixa PDF Relatório (Todas as Semanas)
-                if st.button("📝 Gerar Relatório (Todas as Semanas)"):
-                    atividades_por_servidor_all = {}
-                    for w_index, w_id in enumerate(st.session_state["week_order"]):
-                        week_dates = st.session_state["semanas"][w_id]
-                        for day_date in week_dates:
-                            date_str = day_date.strftime("%d/%m/%Y")
-                            day_acts = st.session_state["atividades_dia"].get(date_str, [])
-                            for act in day_acts:
-                                if act["atividade"] != "Expediente Administrativo":
-                                    for servidor in act["servidores"]:
-                                        if servidor not in atividades_por_servidor_all:
-                                            atividades_por_servidor_all[servidor] = []
-                                        atividades_por_servidor_all[servidor].append({
-                                            "Data": date_str,
-                                            "Atividade": act["atividade"]
-                                        })
-
-                    all_weeks_label = "Relatório de Atividades (Todas as Semanas)"
-                    ulsav_name = st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada"
-                    supervisao_name = st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
-
-                    pdf_bytes_all_rel = pdf_relatorio.generate_pdf_for_atividades(
-                        atividades_por_servidor_all,
-                        all_weeks_label,
-                        ulsav_name,
-                        supervisao_name
-                    )
-
-                    st.download_button(
-                        label="Baixar Relatório (Todas as Semanas)",
-                        data=pdf_bytes_all_rel,
-                        file_name="relatorio_todas_semanas.pdf",
-                        mime="application/pdf",
-                        key="download_relatorio_all"  # Chave única para global
-                    )
-
-
+            all_weeks_label = "Relatório de Atividades (Todas as Semanas)"
+            pdf_bytes_all_rel = pdf_relatorio.generate_pdf_for_atividades(
+                atividades_por_servidor_all,
+                all_weeks_label,
+                st.session_state["ul_sups"][0] if st.session_state["ul_sups"] else "ULSAV não informada",
+                st.session_state["ul_sups"][1] if len(st.session_state["ul_sups"]) > 1 else "Supervisão não informada"
+            )
+            st.download_button(
+                label="Baixar Relatório (Todas as Semanas)",
+                data=pdf_bytes_all_rel,
+                file_name="relatorio_todas_semanas.pdf",
+                mime="application/pdf",
+                key="download_relatorio_all"
+            )
 
 
 with tab3:
