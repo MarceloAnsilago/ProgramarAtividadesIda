@@ -1,12 +1,12 @@
 import io
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
 def generate_pdf_for_atividades(atividades_por_servidor, week_desc, ulsav_name, supervisao_name):
     """
-    Gera o PDF do relatório de atividades por servidor.
+    Gera o PDF do relatório de atividades por servidor, imprimindo uma página por servidor.
     - atividades_por_servidor: dicionário {servidor: [ { "Data":..., "Atividade":... }, ... ] }
     - Para cada servidor, gera um título e, para cada atividade, cria:
         * Tabela com Data, Atividade, Executada
@@ -36,13 +36,15 @@ def generate_pdf_for_atividades(atividades_por_servidor, week_desc, ulsav_name, 
     elements.append(header_paragraph)
     elements.append(Spacer(1, 12))
 
-    # Para cada servidor
-    for servidor, atividades in atividades_por_servidor.items():
+    servers = list(atividades_por_servidor.keys())
+    # Para cada servidor, gera uma página
+    for i, servidor in enumerate(servers):
         # Tarja com o nome do servidor
         servidor_paragraph = Paragraph(f"<b>{servidor}</b>", style_subheading)
         elements.append(servidor_paragraph)
         elements.append(Spacer(1, 8))
 
+        atividades = atividades_por_servidor[servidor]
         for atividade in atividades:
             data = atividade.get("Data", "??/??/????")
             nome_atividade = atividade.get("Atividade", "")
@@ -65,10 +67,9 @@ def generate_pdf_for_atividades(atividades_por_servidor, week_desc, ulsav_name, 
             elements.append(Spacer(1, 6))
 
             # 5 linhas em branco, cada uma sublinhada
-            # Uma forma de fazer: criar uma tabela de 1 coluna e usar LINEBELOW
             for _ in range(5):
                 line_data = [[""]]
-                line_table = Table(line_data, colWidths=[480])  # Ajuste conforme a largura desejada
+                line_table = Table(line_data, colWidths=[480])
                 line_table.setStyle(TableStyle([
                     ('LINEBELOW', (0,0), (-1,0), 1, colors.black),
                     ('BOTTOMPADDING', (0,0), (-1,0), 8),
@@ -77,6 +78,10 @@ def generate_pdf_for_atividades(atividades_por_servidor, week_desc, ulsav_name, 
 
         # Espaço entre servidores
         elements.append(Spacer(1, 24))
+
+        # Insere quebra de página se não for o último servidor
+        if i < len(servers) - 1:
+            elements.append(PageBreak())
 
     doc.build(elements)
     pdf = buffer.getvalue()

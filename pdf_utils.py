@@ -1,3 +1,4 @@
+
 import io
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
 from reportlab.lib.pagesizes import A4
@@ -16,7 +17,6 @@ def generate_pdf_header(doc, week_desc, ulsav_name, supervisao_name):
         [f"ULSAV de {ulsav_name} | Supervisão de {supervisao_name}"],
         [week_desc]
     ]
-    from reportlab.platypus import Table
     header_table = Table(header_data, colWidths=[doc.width])
     header_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#4c2930")),
@@ -54,11 +54,6 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
     :param plantao: nome do servidor selecionado para o plantão
     """
     buffer = io.BytesIO()
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet
-    
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
@@ -110,7 +105,6 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
 
         # Título do dia
         title_data = [[dia_label]]
-        from reportlab.platypus import Table
         title_table = Table(title_data, colWidths=[doc.width])
         title_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#4c2930")),
@@ -129,7 +123,6 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
 
             # Para os servidores, usamos Paragraph para permitir quebra de linha
             servidores_str = ", ".join(act["servidores"]) if act["servidores"] else "Nenhum"
-            from reportlab.platypus import Paragraph
             servidores_paragraph = Paragraph(servidores_str, paragraph_style)
 
             # Extrai a data do dia (parte entre parênteses do título)
@@ -148,12 +141,15 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
                     realizada_paragraph
                 ]
             ]
+            # data_table terá a primeira linha como cabeçalho (colunas),
+            # e data_rows logo em seguida
             data_table = [colunas] + data_rows
 
             t = Table(
                 data_table,
                 colWidths=[data_col, atividade_col, veiculo_col, realizada_col],
-                repeatRows=0
+                # AQUI definimos repeatRows=1 para repetir a 1ª linha em cada página
+                repeatRows=1
             )
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
