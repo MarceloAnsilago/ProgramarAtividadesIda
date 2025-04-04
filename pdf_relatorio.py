@@ -1,58 +1,62 @@
-import io
-from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.lib.pagesizes import A4
+from supabase import create_client, Client
+import os
+import io
+
+# Configurações do Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def generate_pdf_for_atividades(atividades_por_servidor, week_desc, ulsav_name, supervisao_name):
-    """
-    Gera o PDF do relatório de atividades por servidor, imprimindo uma página por servidor.
-    Em cada página, o cabeçalho geral é repetido.
-    - atividades_por_servidor: dicionário {servidor: [ { "Data":..., "Atividade":... }, ... ] }
-    - Para cada servidor, gera um título e, para cada atividade, cria:
-        * Tabela com Data, Atividade, Executada
-        * 3 linhas sublinhadas para anotações (anteriormente 5)
-    """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=36,
-        rightMargin=36,
-        topMargin=36,
-        bottomMargin=36
-    )
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     styles = getSampleStyleSheet()
     style_heading = styles["Heading2"]
-    style_subheading = styles["Heading3"]
+    style_normal = styles["Normal"]
 
-    # Cabeçalho geral (será repetido em cada página)
+    # Cabeçalho comum
     header_paragraph = Paragraph(
-        f"<b>Relatório de Atividades</b><br/>{week_desc}<br/>"
+        f"<b>Diário de Atividades</b><br/>{week_desc}<br/>"
         f"ULSAV: {ulsav_name} | Supervisão: {supervisao_name}",
         style_heading
     )
 
-    servers = list(atividades_por_servidor.keys())
-    for i, servidor in enumerate(servers):
-        # Se não for a primeira página, insere PageBreak
+    # Consulta os dados de todos os servidores uma vez
+    servidores_data = supabase.table("servidores").select("*").execute().data or []
+    dados_servidores = {s["nome"]: s for s in servidores_data}
+
+    for i, nome_servidor in enumerate(atividades_por_servidor.keys()):
         if i > 0:
             elements.append(PageBreak())
-        # Adiciona o cabeçalho geral em cada página
+
         elements.append(header_paragraph)
         elements.append(Spacer(1, 12))
-        
-        # Título do funcionário
-        servidor_paragraph = Paragraph(f"<b>{servidor}</b>", style_subheading)
-        elements.append(servidor_paragraph)
+
+        servidor_info = dados_servidores.get(nome_servidor)
+
+        if servidor_info:
+            dados = (
+                f"<b>Nome:</b> {servidor_info['nome']}<br/>"
+                f"<b>Matrícula:</b> {servidor_info['matricula']}<br/>"
+                f"<b>Cargo:</b> {servidor_info['cargo']}"
+            )
+        else:
+            dados = f"<b>Nome:</b> {nome_servidor} (dados não encontrados)"
+
+        elements.append(Paragraph(dados, style_normal))
         elements.append(Spacer(1, 8))
 
-        atividades = atividades_por_servidor[servidor]
+        atividades = atividades_por_servidor[nome_servidor]
         for atividade in atividades:
             data = atividade.get("Data", "??/??/????")
             nome_atividade = atividade.get("Atividade", "")
-            # Tabela da atividade: cabeçalho e linha de dados
+
             table_data = [
                 ["Data", "Atividade | Observações", "Realizada"],
                 [data, nome_atividade, "[   ] Sim   [   ] Não"]
@@ -70,16 +74,20 @@ def generate_pdf_for_atividades(atividades_por_servidor, week_desc, ulsav_name, 
             elements.append(t)
             elements.append(Spacer(1, 6))
 
-            # 3 linhas em branco sublinhadas para anotações
             for _ in range(3):
-                line_data = [[""]]
-                line_table = Table(line_data, colWidths=[480])
+                line_table = Table([[""]], colWidths=[480])
                 line_table.setStyle(TableStyle([
                     ('LINEBELOW', (0,0), (-1,0), 0.5, colors.lightgrey),
                     ('BOTTOMPADDING', (0,0), (-1,0), 8),
                 ]))
                 elements.append(line_table)
 
+        # ➕ Adiciona espaço e linha de assinatura no final
+        elements.append(Spacer(1, 36))
+        elements.append(Paragraph(
+            "<i>Assinatura do Servidor: ____________________________________________</i>",
+            style_normal
+        ))
         elements.append(Spacer(1, 24))
 
     doc.build(elements)
