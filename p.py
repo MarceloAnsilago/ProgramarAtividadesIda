@@ -102,39 +102,69 @@ def gerar_blocos_sabado_sexta(data_inicio, data_fim, selected_names, itens, unav
     return blocos
 
 # Função para gerar o HTML da escala para exibição via iframe
-def gerar_html_para_iframe(blocos, ano, NOME_MESES, titulo_pagina="Programação de Atividades"):
-    """
-    Gera um HTML com <title> customizado para aparecer corretamente na aba do navegador.
-    """
-    html = f"""
+def gerar_html_para_iframe(blocos, ano, NOME_MESES, titulo_pagina="Escala de Plantão"):
+    grupos = agrupar_blocos_mensalmente(blocos, NOME_MESES)
+    html_head = f"""
     <html>
     <head>
-        <meta charset='UTF-8'>
-        <title>{titulo_pagina}</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                padding: 20px;
+    <meta charset="UTF-8">
+    <title>{titulo_pagina}</title>
+    <style>
+        body {{
+            font-family: "Helvetica", sans-serif;
+        }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }}
+        th, td {{
+            border: 1px solid #999;
+            padding: 6px 10px;
+            text-align: left;
+        }}
+        h2 {{
+            margin-top: 30px;
+        }}
+        @media print {{
+            #printButton {{
+                display: none;
             }}
-            h2 {{
-                color: #2c3e50;
-            }}
-            p {{
-                margin-bottom: 8px;
-            }}
-        </style>
+        }}
+    </style>
+    <script>
+        function printIframe() {{
+            window.print();
+        }}
+    </script>
     </head>
     <body>
-        <h2>Escala de Plantão - {ano}</h2>
+    <h3>{titulo_pagina} IDARON para recebimento de vacinas agrotóxicos e produtos biológicos ({ano})</h3>
     """
-    for bloco in blocos:
-        html += f"<p><strong>{bloco['data']}</strong>: {', '.join(bloco['disponiveis'])}</p>"
-    
-    html += """
+    html_body = ""
+    chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
+    for (year, month) in chaves_ordenadas:
+        nome_mes = NOME_MESES[month]
+        html_body += f'<h2>{nome_mes} de {year}</h2>\n'
+        html_body += '<table>\n'
+        html_body += '<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
+        for item in grupos[(year, month)]:
+            data_str = item["Data"]
+            servidor = item["Servidor"]
+            contato = item["Contato"]
+            html_body += f"<tr><td>{data_str}</td><td>{servidor}</td><td>{contato}</td></tr>\n"
+        html_body += '</table>\n'
+
+    html_body += """
+    <button id="printButton" onclick="printIframe()">Imprimir</button>
+    """
+
+    html_end = """
     </body>
     </html>
     """
-    return html
+    return html_head + html_body + html_end
+
 
 
 # Mapeamento do número do mês para o nome em português
@@ -390,68 +420,6 @@ def agrupar_blocos_mensalmente(blocos, NOME_MESES):
             "Contato": telefone
         })
     return grupos
-
-def gerar_html_para_iframe(blocos, ano, NOME_MESES):
-    grupos = agrupar_blocos_mensalmente(blocos, NOME_MESES)
-    html_head = f"""
-    <html>
-    <head>
-    <meta charset="UTF-8">
-    <style>
-        body {{
-            font-family: "Helvetica", sans-serif;
-        }}
-        table {{
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 20px;
-        }}
-        th, td {{
-            border: 1px solid #999;
-            padding: 6px 10px;
-            text-align: left;
-        }}
-        h2 {{
-            margin-top: 30px;
-        }}
-        @media print {{
-            #printButton {{
-                display: none;
-            }}
-        }}
-    </style>
-    <script>
-        function printIframe() {{
-            window.print();
-        }}
-    </script>
-    </head>
-    <body>
-    <h3>Escala de Plantão IDARON para recebimento de vacinas agrotóxicos e produtos biológicos ({ano})</h3>
-    """
-    html_body = ""
-    chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
-    for (year, month) in chaves_ordenadas:
-        nome_mes = NOME_MESES[month]
-        html_body += f'<h2>{nome_mes} de {year}</h2>\n'
-        html_body += '<table>\n'
-        html_body += '<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
-        for item in grupos[(year, month)]:
-            data_str = item["Data"]
-            servidor = item["Servidor"]
-            contato = item["Contato"]
-            html_body += f"<tr><td>{data_str}</td><td>{servidor}</td><td>{contato}</td></tr>\n"
-        html_body += '</table>\n'
-
-    html_body += """
-    <button id="printButton" onclick="printIframe()">Imprimir</button>
-    """
-
-    html_end = """
-    </body>
-    </html>
-    """
-    return html_head + html_body + html_end
 
 def gerar_blocos_sabado_sexta(data_inicio, data_fim, nomes_selecionados, itens, indisponibilidades):
     dict_telefones = {nome: tel for (nome, tel) in itens}
