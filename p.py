@@ -73,6 +73,9 @@ def init_plantao_session_state():
 
 init_plantao_session_state()
 
+if st.session_state.get("recarregar", False):
+    st.session_state["recarregar"] = False
+    st.experimental_rerun()
 
 # Inicializa chaves necessárias, se ainda não existirem
 if "week_order" not in st.session_state:
@@ -994,7 +997,7 @@ def main_app():
 
             if st.button("🗓️Adicionar Semana"):
                 add_week_if_not_exists(selected_date, include_saturday, include_sunday)
-                st.success("Semana adicionada!")
+                st.session_state["recarregar"] = True
                 st.rerun()
 
             st.markdown("---")
