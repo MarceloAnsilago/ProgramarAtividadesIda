@@ -240,10 +240,6 @@ def main_view():
         st.rerun()
 
 
-    if st.button("🚪 Logout", key="btn_logout"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
 
 
 # --- Execução Principal ---
