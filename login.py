@@ -1,13 +1,21 @@
 import streamlit as st
+
+# Primeiro comando Streamlit da aplicação
+st.set_page_config(
+    page_title="Programação de Atividades IDARON", 
+    page_icon="🗓️",
+    layout="wide"
+)
+
+# Outros imports (inclusive do p.py que usa Streamlit)
+import p
 from supabase import create_client, Client
 import streamlit_authenticator as stauth
 import os
 import bcrypt
-import p
 
-
-st.set_page_config(layout="wide")
-
+# Pode usar st.title() ou outros comandos agora
+# st.title("Progamação de Atividades IDARON")
 
 # Configurações do Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
@@ -34,66 +42,75 @@ def init_session_state():
     st.session_state.setdefault("unavailable_periods", {})
 
 init_session_state()
+
+
+
 def login_form():
-    st.title("🔐 Login - Usuário e Unidade")
-    login = st.text_input("👤 Login")
-    senha = st.text_input("🔒 Senha", type="password")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # Título centralizado
+        st.markdown("<h1 style='text-align: center;'>📅 Programação de Atividades IDARON</h1>", unsafe_allow_html=True)
+        st.markdown("### 🔐 Login - Usuário e Unidade")
 
-    unidades = supabase.table("unidades").select("nome").execute().data or []
-    nomes_unidades = [u["nome"] for u in unidades]
-    unidade = st.selectbox("🏢 Unidade", nomes_unidades)
+        # Campos de login
+        login = st.text_input("👤 Login")
+        senha = st.text_input("🔒 Senha", type="password")
 
-    if st.button("🔐 Login", key="btn_login"):
-        # Busca o usuário
-        resposta = supabase.table("usuarios").select("*")\
-            .eq("login", login)\
-            .eq("unidade", unidade)\
-            .execute()
+        # Unidades do Supabase
+        unidades = supabase.table("unidades").select("nome").execute().data or []
+        nomes_unidades = [u["nome"] for u in unidades]
+        unidade = st.selectbox("🏢 Unidade", nomes_unidades)
 
-        if not resposta.data:
-            st.error("❌ Usuário não encontrado.")
-            return
+        # Botão de login
+        if st.button("🔐 Login", key="btn_login"):
+            resposta = supabase.table("usuarios").select("*")\
+                .eq("login", login)\
+                .eq("unidade", unidade)\
+                .execute()
 
-        user = resposta.data[0]
+            if not resposta.data:
+                st.error("❌ Usuário não encontrado.")
+                return
 
-        if user["status"] != "Ativo":
-            st.warning("⚠️ Usuário inativo. Contate o administrador.")
-            return
+            user = resposta.data[0]
 
-        if not bcrypt.checkpw(senha.encode(), user["hashed_password"].encode()):
-            st.error("❌ Senha incorreta.")
-            return
+            if user["status"] != "Ativo":
+                st.warning("⚠️ Usuário inativo. Contate o administrador.")
+                return
 
-        # Login válido
-        st.success("✅ Login realizado com sucesso!")
-        st.session_state.logged_in = True
-        st.session_state.user = user
-        st.session_state.view = "dashboard" if user.get("role") == "admin" else "app"
-        st.session_state["is_admin"] = user.get("role") == "admin"
+            if not bcrypt.checkpw(senha.encode(), user["hashed_password"].encode()):
+                st.error("❌ Senha incorreta.")
+                return
 
-        # Resolve ID da unidade
-        res_unidade = supabase.table("unidades").select("id").eq("nome", unidade).execute()
-        if res_unidade.data:
-            unidade_id = res_unidade.data[0]["id"]
-            st.session_state["selected_unidade"] = unidade
-            st.session_state["selected_unidade_id"] = unidade_id
+            # Login bem-sucedido
+            st.success("✅ Login realizado com sucesso!")
+            st.session_state.logged_in = True
+            st.session_state.user = user
+            st.session_state.view = "dashboard" if user.get("role") == "admin" else "app"
+            st.session_state["is_admin"] = user.get("role") == "admin"
 
-            # Para usuários comuns, tentar buscar o servidor correspondente
-            if user.get("role") != "admin":
-                res_serv = supabase.table("servidores").select("*")\
-                    .eq("nome", login).eq("escritorio_id", unidade_id).execute()
+            # Unidade e servidor
+            res_unidade = supabase.table("unidades").select("id").eq("nome", unidade).execute()
+            if res_unidade.data:
+                unidade_id = res_unidade.data[0]["id"]
+                st.session_state["selected_unidade"] = unidade
+                st.session_state["selected_unidade_id"] = unidade_id
 
-                if res_serv.data:
-                    servidor = res_serv.data[0]
-                    st.session_state["usuario_logado"] = servidor["nome"]
-                    st.session_state["servidor_matricula"] = servidor["matricula"]
-                    st.session_state["servidor_id"] = servidor["id"]
-                else:
-                    st.warning("⚠️ Nenhum servidor correspondente encontrado na unidade.")
-        else:
-            st.warning("⚠️ Unidade não encontrada.")
+                if user.get("role") != "admin":
+                    res_serv = supabase.table("servidores").select("*")\
+                        .eq("nome", login).eq("escritorio_id", unidade_id).execute()
 
-        st.rerun()
+                    if res_serv.data:
+                        servidor = res_serv.data[0]
+                        st.session_state["usuario_logado"] = servidor["nome"]
+                        st.session_state["servidor_matricula"] = servidor["matricula"]
+                        st.session_state["servidor_id"] = servidor["id"]
+                    else:
+                        st.warning("⚠️ Nenhum servidor correspondente encontrado na unidade.")
+            else:
+                st.warning("⚠️ Unidade não encontrada.")
+
+            st.rerun()
 
 
 # --- Admin: Gerenciamento de Unidades ---

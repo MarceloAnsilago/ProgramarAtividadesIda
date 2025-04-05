@@ -104,7 +104,7 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
     styles = getSampleStyleSheet()
     style_normal = styles["BodyText"]
     style_normal.fontName = "Helvetica"
-    style_normal.fontSize = 10
+    style_normal.fontSize = 8
     style_normal.leading = 12
 
     elements = []
@@ -137,7 +137,7 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
         day_activities = day_info["Activities"]
         for act in day_activities:
             atividade_nome = act["atividade"]
-            servidores_str = ", ".join(act["servidores"]) if act["servidores"] else "Nenhum"
+            servidores_str = ", ".join(s.split()[0] for s in act["servidores"]) if act["servidores"] else "Nenhum"
             realizada_str = "[   ] Sim   [   ] Não"
 
             # Cabeçalho de 3 colunas
@@ -176,7 +176,7 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
         # Agrupa o dia inteiro em um bloco KeepTogether
         elements.append(KeepTogether(day_flowables))
         elements.append(Spacer(1, 12))
-
+    doc.title = week_desc or "Programação de Atividades"
     # Monta o PDF
     doc.build(elements)
 

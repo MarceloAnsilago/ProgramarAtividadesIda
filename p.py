@@ -11,15 +11,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime, date
-# ------------------------------------------------------------------------------
-# Configuração inicial e título
-# ------------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Programação de Atividades IDARON", 
-    page_icon="🗓️",  # Pode ser um emoji ou caminho para uma imagem
-    layout="wide"
-)
-st.title("Progamação de Atividades IDARON")
+
 
 # ------------------------------------------------------------------------------
 # CSS para personalizar estilos
@@ -75,7 +67,7 @@ init_plantao_session_state()
 
 if st.session_state.get("recarregar", False):
     st.session_state["recarregar"] = False
-    st.experimental_rerun()
+    st.rerun()
 
 # Inicializa chaves necessárias, se ainda não existirem
 if "week_order" not in st.session_state:
@@ -110,16 +102,40 @@ def gerar_blocos_sabado_sexta(data_inicio, data_fim, selected_names, itens, unav
     return blocos
 
 # Função para gerar o HTML da escala para exibição via iframe
-def gerar_html_para_iframe(blocos, ano, NOME_MESES):
+def gerar_html_para_iframe(blocos, ano, NOME_MESES, titulo_pagina="Programação de Atividades"):
     """
-    Gera um HTML simples que exibe a escala de plantão.
+    Gera um HTML com <title> customizado para aparecer corretamente na aba do navegador.
     """
-    html = "<html><head><meta charset='UTF-8'></head><body>"
-    html += f"<h2>Escala de Plantão - {ano}</h2>"
+    html = f"""
+    <html>
+    <head>
+        <meta charset='UTF-8'>
+        <title>{titulo_pagina}</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                padding: 20px;
+            }}
+            h2 {{
+                color: #2c3e50;
+            }}
+            p {{
+                margin-bottom: 8px;
+            }}
+        </style>
+    </head>
+    <body>
+        <h2>Escala de Plantão - {ano}</h2>
+    """
     for bloco in blocos:
         html += f"<p><strong>{bloco['data']}</strong>: {', '.join(bloco['disponiveis'])}</p>"
-    html += "</body></html>"
+    
+    html += """
+    </body>
+    </html>
+    """
     return html
+
 
 # Mapeamento do número do mês para o nome em português
 month_map_pt = {
@@ -1235,6 +1251,7 @@ def main_app():
                         st.markdown('<hr class="full-width-hr">', unsafe_allow_html=True)
 
                         # ===================== IMPRESSÃO: Semana Atual =====================
+                      # ===================== IMPRESSÃO: Semana Atual =====================
                         report_col1, report_col2, report_col3 = st.columns([1,2,1])
                         with report_col2:
                             st.write("#### 🖨️ Impressões")
@@ -1361,7 +1378,7 @@ def main_app():
             9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
         }
 
-        st.title("💉 Plantão - Recebimento de Vacinas, Agrotóxicos e Produtos Biológicos")
+        # st.title("💉 Plantão - Recebimento de Vacinas, Agrotóxicos e Produtos Biológicos")
         
 
         # --- Parte: Plantão (Servidores para Plantão) ---
@@ -1470,7 +1487,13 @@ def main_app():
                     st.warning("⚠️ Não foi possível gerar escala (todos indisponíveis ou sem intervalos).")
                 else:
                     ano_escalado = data_cronograma_inicio.year
-                    html_iframe = gerar_html_para_iframe(blocos, ano=ano_escalado, NOME_MESES=NOME_MESES)
+                    html_iframe = gerar_html_para_iframe(
+                            blocos,
+                            ano=ano_escalado,
+                            NOME_MESES=NOME_MESES,
+                            titulo_pagina="Relatório de Plantão"
+                        )
+
                     components.html(html_iframe, height=600, scrolling=True)
 
 if __name__ == "__main__":
