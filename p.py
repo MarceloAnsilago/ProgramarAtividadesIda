@@ -10,6 +10,7 @@ from pdf_utils import generate_pdf_for_week
 import streamlit.components.v1 as components
 import pandas as pd
 from supabase import create_client, Client
+from datetime import datetime, date
 # ------------------------------------------------------------------------------
 # Configuração inicial e título
 # ------------------------------------------------------------------------------
@@ -679,7 +680,26 @@ def main_app():
                 )
                 if atividade_escolhida:
                     nova_desc_edit = st.text_input("Nova Descrição", value=atividade_escolhida["descricao"], key=f"desc_edit_{atividade_escolhida['id']}")
-                    data_atv_edit = st.date_input("Data", value=atividade_escolhida.get("data",""), key=f"data_edit_{atividade_escolhida['id']}")
+                    # data_atv_edit = st.date_input("Data", value=atividade_escolhida.get("data",""), key=f"data_edit_{atividade_escolhida['id']}")
+                    data_str = atividade_escolhida.get("data", "")
+                    if isinstance(data_str, str) and data_str:
+                        try:
+                            valor_data = datetime.strptime(data_str, "%Y-%m-%d").date()
+                        except ValueError:
+                            valor_data = date.today()
+                    elif isinstance(data_str, date):
+                        valor_data = data_str
+                    else:
+                        valor_data = date.today()
+
+                    data_atv_edit = st.date_input(
+                        "Data",
+                        value=valor_data,
+                        key=f"data_edit_{atividade_escolhida['id']}"
+                    )
+                                    
+                   
+                   
                     status_padrao_ativ = (atividade_escolhida.get("status","Inativo") == "Ativo")
                     status_edit_ativ = st.checkbox("Ativo?", value=status_padrao_ativ, key=f"status_ativ_{atividade_escolhida['id']}")
                     if unidade_id:
