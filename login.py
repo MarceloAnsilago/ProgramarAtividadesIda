@@ -214,7 +214,7 @@ def dashboard_admin():
         gerenciar_usuarios()
     seletor_unidade_aplicacao()
 
-# --- View Principal ---
+
 # --- View Principal ---
 def main_view():
     if not st.session_state["logged_in"]:
@@ -228,10 +228,17 @@ def main_view():
     if view == "dashboard" and role == "admin":
         dashboard_admin()
     elif view == "app":
+        p.init_plantao_session_state()  # <- ESSA LINHA ADICIONADA
         p.main_app()
         if role == "admin" and st.button("🔙 Voltar ao Dashboard", key="btn_voltar_dash"):
             st.session_state["view"] = "dashboard"
             st.rerun()
+
+    if st.button("🚪 Logout", key="btn_logout"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
 
     if st.button("🚪 Logout", key="btn_logout"):
         for key in list(st.session_state.keys()):
