@@ -46,7 +46,7 @@ init_session_state()
 
 
 def login_form():
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([2, 2, 2])
     with col2:
         # Título centralizado
         st.markdown("<h1 style='text-align: center;'>📅 Programação de Atividades IDARON</h1>", unsafe_allow_html=True)
