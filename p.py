@@ -66,6 +66,7 @@ def init_plantao_session_state():
     st.session_state.setdefault("plantao_itens", [])  # escala gerada
     st.session_state.setdefault("checklist", {})  # controle de impressão (atividades/servidores marcados)
     st.session_state.setdefault("all_servidores", [])  # lista carregada de servidores
+    st.session_state.setdefault("servidores", [])
     st.session_state.setdefault("all_atividades", [])  # lista de atividades disponíveis
     st.session_state.setdefault("all_veiculos", [])  # lista de veículos cadastrados
     st.session_state.setdefault("all_ul_sups", [])  # lista de supervisões/unidades se necessário
@@ -172,13 +173,17 @@ def add_week_if_not_exists(ref_date, include_saturday=False, include_sunday=Fals
     if wid not in st.session_state["semanas"]:
         st.session_state["semanas"][wid] = get_week_dates(ref_date, include_saturday, include_sunday)
         st.session_state["week_order"].append(wid)
+
+        # Garante que "servidores" está disponível antes de usar
+        servidores = st.session_state.get("servidores", [])
         for day_date in st.session_state["semanas"][wid]:
             add_activity_to_date(
                 day_date,
                 atividade="Expediente Administrativo",
-                servidores=[s for s in st.session_state["servidores"]],
+                servidores=servidores,
                 veiculo="Nenhum"
             )
+
 
 def add_activity_to_date(activity_date, atividade, servidores, veiculo):
     date_str = activity_date.strftime("%d/%m/%Y")
