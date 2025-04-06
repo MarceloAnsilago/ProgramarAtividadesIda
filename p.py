@@ -1,17 +1,17 @@
 import streamlit as st
 from datetime import date, timedelta
 from io import BytesIO
-import base64
 import os
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import LETTER
 import pdf_relatorio
 from pdf_utils import generate_pdf_for_week
+from pdf_escala import gerar_pdf_escala
 import streamlit.components.v1 as components
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime, date
-
+import datetime as dt
 
 # ------------------------------------------------------------------------------
 # CSS para personalizar estilos
@@ -474,10 +474,11 @@ def main_app():
     # ------------------------------------------------------------------------------
     # Layout com Abas
     # ------------------------------------------------------------------------------
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 Dados (Informações Gerais)", 
         "🗓️ Programação (Gerar programação de atividades)", 
-        "📦 Programação para recebimento"
+        "📦 Programação para recebimento",
+        "📅 Gerar Escala de Férias"
     ])
     # ------------------------------------------------------------------------------
     # Aba 1: Dados
@@ -677,6 +678,9 @@ def main_app():
                     if isinstance(data_str, str) and data_str:
                         try:
                             valor_data = datetime.strptime(data_str, "%Y-%m-%d").date()
+
+                            # AttributeError: module 'datetime' has no attribute 'strptime'
+
                         except ValueError:
                             valor_data = date.today()
                     elif isinstance(data_str, date):
@@ -1334,9 +1338,6 @@ def main_app():
                             key="download_relatorio_all"
                         )
 
-                       
-
-
     # ===== Início da aba 3: Plantão =====
     with tab3:
         # Variável global para nomes dos meses
@@ -1463,6 +1464,100 @@ def main_app():
                         )
 
                     components.html(html_iframe, height=600, scrolling=True)
+    with tab4:
+       
+        # --- Supabase Config ---
+       SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
+       SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
+       supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+       # Layout centralizado
+       col_esq, col_meio, col_dir = st.columns([1, 3.5, 1])
+        
+       with col_meio:
+            st.title("📅 Cadastro de Escala de Férias")
+
+            ano_escala = st.number_input(
+                "Ano da escala",
+                value=dt.date.today().year,
+                step=1,
+                format="%d",
+                key="ano_escala_input"
+            )
+
+            # --- Carregar servidores da unidade ---
+            unidade_id = 3
+            try:
+                response = supabase.table("servidores").select("*").eq("escritorio_id", unidade_id).execute()
+                servidores = [s["nome"] for s in response.data] if response.data else []
+            except Exception as e:
+                st.error(f"Erro ao carregar servidores: {e}")
+                servidores = []
+
+            if "intervalos" not in st.session_state:
+                st.session_state.intervalos = []
+
+            if servidores:
+                servidor = st.selectbox("Selecione o servidor", servidores)
+            else:
+                st.warning("Nenhum servidor encontrado para o escritório.")
+                servidor = None
+
+            col_data1, col_data2 = st.columns(2)
+            with col_data1:
+                data_inicial = st.date_input("Data Inicial", value=dt.date.today())
+            with col_data2:
+                data_final = st.date_input("Data Final", value=dt.date.today())
+
+            if st.button("➕ Adicionar Intervalo", key="add_intervalo"):
+                if not servidor:
+                    st.warning("Selecione um servidor.")
+                elif data_final < data_inicial:
+                    st.error("A data final não pode ser anterior à data inicial.")
+                else:
+                    st.session_state.intervalos.append({
+                        "servidor": servidor,
+                        "data_inicial": data_inicial,
+                        "data_final": data_final
+                    })
+                    st.rerun()
+
+            st.subheader("📋 Intervalos Inseridos")
+            if st.session_state.intervalos:
+                for i, item in enumerate(st.session_state.intervalos):
+                    col_l, col_r = st.columns([6, 1])
+                    with col_l:
+                        st.markdown(f"**{i+1}. {item['servidor']}**: {item['data_inicial']} a {item['data_final']}")
+                    with col_r:
+                        if st.button("❌ Remover", key=f"remove_{i}"):
+                            st.session_state.intervalos.pop(i)
+                            st.rerun()
+            else:
+                st.info("Nenhum intervalo cadastrado.")
+
+            st.markdown("---")
+            if st.button("📥 Gerar Escala em PDF"):
+                if st.session_state.intervalos:
+                    caminho_pdf = "escala_de_ferias.pdf"
+                    gerar_pdf_escala(
+                        st.session_state.intervalos,
+                        caminho_pdf,
+                        ano_titulo=ano_escala
+                    )
+                    with open(caminho_pdf, "rb") as f:
+                        pdf_bytes = f.read()
+
+                    st.download_button(
+                        label="⬇️ Baixar Escala de Férias",
+                        data=pdf_bytes,
+                        file_name="escala_de_ferias.pdf",
+                        mime="application/pdf"
+                    )
+                else:
+                    st.warning("Nenhum intervalo cadastrado.")
+
+
+
+
 
 if __name__ == "__main__":
     main_app()
