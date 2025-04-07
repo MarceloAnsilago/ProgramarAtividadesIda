@@ -1414,7 +1414,7 @@ def main_app():
                         with col_dt2:
                             fim = st.date_input("Data de Fim", key=f"fim_{nome_tab}", value=date.today())
 
-                        if st.button("Adicionar Período", key=f"btn_{nome_tab}"):
+                        if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
                             st.session_state["unavailable_periods"][nome_tab].append((inicio, fim))
                             st.success(f"Período adicionado para {nome_tab}.")
 
@@ -1425,7 +1425,7 @@ def main_app():
                                 colA, colB, colC = st.columns([3, 3, 1])
                                 colA.write(f"**Início:** {start_dt}")
                                 colB.write(f"**Fim:** {end_dt}")
-                                if colC.button("Remover", key=f"remover_{nome_tab}_{idx}"):
+                                if colC.button("🗑️ Remover", key=f"remover_{nome_tab}_{idx}"):
                                     st.session_state["unavailable_periods"][nome_tab].pop(idx)
                                     st.rerun()
                         else:
