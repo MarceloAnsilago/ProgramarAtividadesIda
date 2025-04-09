@@ -104,6 +104,26 @@ class SemanaManager:
                 return
 
 
+# [REFATORADO] Encapsulamento da lógica de indisponibilidade por servidor
+class IndisponibilidadeManager:
+    def __init__(self):
+        self.data = st.session_state.setdefault("unavailable_periods", {})
+
+    def get_periodos(self, nome):
+        return self.data.get(nome, [])
+
+    def adicionar_periodo(self, nome, inicio, fim):
+        if nome not in self.data:
+            self.data[nome] = []
+        self.data[nome].append((inicio, fim))
+
+    def remover_periodo(self, nome, idx):
+        if nome in self.data and 0 <= idx < len(self.data[nome]):
+            self.data[nome].pop(idx)
+
+
+
+
 # [REFATORADO] Gerenciador leve de checkboxes
 def is_checkbox_checked(date_str, tipo, idx, nome=None):
     key = f"{tipo}_{idx}" if nome is None else f"{tipo}_{idx}_{nome}"
@@ -1208,12 +1228,7 @@ def main_app():
                                     for act_idx, atividade in enumerate(day_acts):
                                         st.markdown(f"##### Atividade: {atividade['atividade']}")
                                         if atividade["atividade"] != "Expediente Administrativo":
-                                            # activity_checked = st.checkbox(
-                                            #     f"Marcar atividade: {atividade['atividade']}",
-                                            #     value=True,
-                                            #     key=f"checkbox_atividade_{ds}_{act_idx}",
-                                            #     help="Desmarque para remover essa atividade."
-                                            # )
+
                                             # [REFATORADO]
                                             activity_checked = st.checkbox(
                                                 f"Marcar atividade: {atividade['atividade']}",
@@ -1230,14 +1245,7 @@ def main_app():
 
                                             for s in atividade["servidores"][:]:
                                                 key_server = f"checkbox_servidor_{ds}_{act_idx}_{s}"
-                                                # server_checked = st.checkbox(
-                                                #     s,
-                                                #     value=True,
-                                                #     key=key_server,
-                                                #     help="Desmarque para remover da atividade e retornar ao Expediente Administrativo."
-                                                # )
 
- 
                                                 # [REFATORADO]
                                                 server_checked = st.checkbox(
                                                     s,
@@ -1459,22 +1467,29 @@ def main_app():
                         with col_dt2:
                             fim = st.date_input("Data de Fim", key=f"fim_{nome_tab}", value=date.today())
 
+                        # if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
+                        #     st.session_state["unavailable_periods"][nome_tab].append((inicio, fim))
+                        #     st.success(f"Período adicionado para {nome_tab}.")
                         if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
-                            st.session_state["unavailable_periods"][nome_tab].append((inicio, fim))
+                            IndisponibilidadeManager().adicionar_periodo(nome_tab, inicio, fim)
                             st.success(f"Período adicionado para {nome_tab}.")
+
 
                         st.write("### 📋 Períodos de Indisponibilidade Registrados")
 
-                        if st.session_state["unavailable_periods"][nome_tab]:
-                            for idx, (start_dt, end_dt) in enumerate(st.session_state["unavailable_periods"][nome_tab]):
+                        # [REFATORADO]
+                        periodos = IndisponibilidadeManager().get_periodos(nome_tab)
+                        if periodos:
+                            for idx, (start_dt, end_dt) in enumerate(periodos):
                                 colA, colB, colC = st.columns([3, 3, 1])
                                 colA.write(f"**Início:** {start_dt}")
                                 colB.write(f"**Fim:** {end_dt}")
                                 if colC.button("🗑️ Remover", key=f"remover_{nome_tab}_{idx}"):
-                                    st.session_state["unavailable_periods"][nome_tab].pop(idx)
+                                    IndisponibilidadeManager().remover_periodo(nome_tab, idx)
                                     st.rerun()
                         else:
                             st.info("📭 Nenhum período cadastrado até o momento.")
+
 
 
         st.divider()
