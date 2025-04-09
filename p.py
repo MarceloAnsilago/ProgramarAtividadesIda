@@ -68,6 +68,16 @@ def init_plantao_session_state():
 
 init_plantao_session_state()
 
+
+
+
+def get_supabase_client() -> Client:
+        SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
+        SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+
 NOME_MESES = {
             1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
             5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
@@ -368,10 +378,6 @@ def render_indisponibilidades():
                         st.rerun()
             else:
                 st.info("📭 Nenhum período cadastrado até o momento.")
-
-
-
-
 def render_cronograma_plantao():
     col_cronograma1, col_cronograma2 = st.columns(2)
     with col_cronograma1:
@@ -490,9 +496,6 @@ def remove_server_from_card(date_str, card_index, server):
 # [REFATORADO]
 def remove_activity_card(date_str, card_index):
     SemanaManager().remover_atividade(date_str, card_index)
-
-
-
 
 def remove_week(week_id):
     if week_id in st.session_state["semanas"]:
@@ -630,6 +633,88 @@ def agrupar_blocos_mensalmente(blocos, NOME_MESES):
         })
     return grupos
 
+def render_formulario_ferias(supabase):
+    st.title("📅 Cadastro de Escala de Férias")
+
+    ano_escala = st.number_input(
+        "Ano da escala",
+        value=dt.date.today().year,
+        step=1,
+        format="%d",
+        key="ano_escala_input"
+    )
+    st.session_state["ano_escala"] = ano_escala
+
+    unidade_id = st.session_state.get("selected_unidade_id", 3)
+
+    try:
+        response = supabase.table("servidores").select("*").eq("escritorio_id", unidade_id).execute()
+        servidores = [s["nome"] for s in response.data] if response.data else []
+    except Exception as e:
+        st.error(f"Erro ao carregar servidores: {e}")
+        servidores = []
+
+    if servidores:
+        servidor = st.selectbox("Selecione o servidor", servidores, key="ferias_servidor")
+    else:
+        servidor = None
+        st.warning("Nenhum servidor encontrado para o escritório.")
+
+    col_data1, col_data2 = st.columns(2)
+    with col_data1:
+        data_inicial = st.date_input("Data Inicial", value=dt.date.today(), key="ferias_inicio")
+    with col_data2:
+        data_final = st.date_input("Data Final", value=dt.date.today(), key="ferias_fim")
+
+    if st.button("➕ Adicionar Intervalo", key="add_intervalo_ferias"):
+        if not servidor:
+            st.warning("Selecione um servidor.")
+        elif data_final < data_inicial:
+            st.error("A data final não pode ser anterior à data inicial.")
+        else:
+            st.session_state.setdefault("intervalos", []).append({
+                "servidor": servidor,
+                "data_inicial": data_inicial,
+                "data_final": data_final
+            })
+            st.rerun()
+
+def render_tabela_ferias():
+    st.subheader("📋 Intervalos Inseridos")
+    if st.session_state.get("intervalos"):
+        for i, item in enumerate(st.session_state["intervalos"]):
+            col_l, col_r = st.columns([6, 1])
+            with col_l:
+                st.markdown(f"**{i+1}. {item['servidor']}**: {item['data_inicial']} a {item['data_final']}")
+            with col_r:
+                if st.button("❌ Remover", key=f"remove_ferias_{i}"):
+                    st.session_state["intervalos"].pop(i)
+                    st.rerun()
+    else:
+        st.info("Nenhum intervalo cadastrado.")
+
+def render_botao_gerar_pdf():
+    st.markdown("---")
+    if st.button("📥 Gerar Escala em PDF", key="gerar_pdf_ferias"):
+        if st.session_state.get("intervalos"):
+            caminho_pdf = "escala_de_ferias.pdf"
+            gerar_pdf_escala(
+                st.session_state["intervalos"],
+                caminho_pdf,
+                ano_titulo=st.session_state.get("ano_escala", dt.date.today().year)
+            )
+            with open(caminho_pdf, "rb") as f:
+                pdf_bytes = f.read()
+
+            st.download_button(
+                label="⬇️ Baixar Escala de Férias",
+                data=pdf_bytes,
+                file_name="escala_de_ferias.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.warning("Nenhum intervalo cadastrado.")
+
 def main_app():
   
     # ------------------------------------------------------------------------------
@@ -645,11 +730,13 @@ def main_app():
     # Aba 1: Dados
     # ------------------------------------------------------------------------------
     with tab1:
-        # Configurações do Supabase
-        SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
-        SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-         # Função para carregar os escritórios (unidades)
+        # # Configurações do Supabase
+        # SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
+        # SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
+        # supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        supabase = get_supabase_client()
+
+        # Função para carregar os escritórios (unidades)
         def get_escritorios():
             res = supabase.table("unidades").select("*").execute()
             if res.data:
@@ -1549,95 +1636,10 @@ def main_app():
 
     with tab4:
        
-        # --- Supabase Config ---
-       SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
-       SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
-       supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-       # Layout centralizado
-       col_esq, col_meio, col_dir = st.columns([1, 3.5, 1])
-        
-       with col_meio:
-            st.title("📅 Cadastro de Escala de Férias")
-
-            ano_escala = st.number_input(
-                "Ano da escala",
-                value=dt.date.today().year,
-                step=1,
-                format="%d",
-                key="ano_escala_input"
-            )
-
-            # --- Carregar servidores da unidade ---
-            unidade_id = 3
-            try:
-                response = supabase.table("servidores").select("*").eq("escritorio_id", unidade_id).execute()
-                servidores = [s["nome"] for s in response.data] if response.data else []
-            except Exception as e:
-                st.error(f"Erro ao carregar servidores: {e}")
-                servidores = []
-
-            if "intervalos" not in st.session_state:
-                st.session_state.intervalos = []
-
-            if servidores:
-                servidor = st.selectbox("Selecione o servidor", servidores)
-            else:
-                st.warning("Nenhum servidor encontrado para o escritório.")
-                servidor = None
-
-            col_data1, col_data2 = st.columns(2)
-            with col_data1:
-                data_inicial = st.date_input("Data Inicial", value=dt.date.today())
-            with col_data2:
-                data_final = st.date_input("Data Final", value=dt.date.today())
-
-            if st.button("➕ Adicionar Intervalo", key="add_intervalo"):
-                if not servidor:
-                    st.warning("Selecione um servidor.")
-                elif data_final < data_inicial:
-                    st.error("A data final não pode ser anterior à data inicial.")
-                else:
-                    st.session_state.intervalos.append({
-                        "servidor": servidor,
-                        "data_inicial": data_inicial,
-                        "data_final": data_final
-                    })
-                    st.rerun()
-
-            st.subheader("📋 Intervalos Inseridos")
-            if st.session_state.intervalos:
-                for i, item in enumerate(st.session_state.intervalos):
-                    col_l, col_r = st.columns([6, 1])
-                    with col_l:
-                        st.markdown(f"**{i+1}. {item['servidor']}**: {item['data_inicial']} a {item['data_final']}")
-                    with col_r:
-                        if st.button("❌ Remover", key=f"remove_{i}"):
-                            st.session_state.intervalos.pop(i)
-                            st.rerun()
-            else:
-                st.info("Nenhum intervalo cadastrado.")
-
-            st.markdown("---")
-            if st.button("📥 Gerar Escala em PDF"):
-                if st.session_state.intervalos:
-                    caminho_pdf = "escala_de_ferias.pdf"
-                    gerar_pdf_escala(
-                        st.session_state.intervalos,
-                        caminho_pdf,
-                        ano_titulo=ano_escala
-                    )
-                    with open(caminho_pdf, "rb") as f:
-                        pdf_bytes = f.read()
-
-                    st.download_button(
-                        label="⬇️ Baixar Escala de Férias",
-                        data=pdf_bytes,
-                        file_name="escala_de_ferias.pdf",
-                        mime="application/pdf"
-                    )
-                else:
-                    st.warning("Nenhum intervalo cadastrado.")
-
+        supabase = get_supabase_client()
+        render_formulario_ferias(supabase)
+        render_tabela_ferias()
+        render_botao_gerar_pdf()
 
 if __name__ == "__main__":
     main_app()
