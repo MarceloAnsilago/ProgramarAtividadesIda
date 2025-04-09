@@ -68,6 +68,14 @@ def init_plantao_session_state():
 
 init_plantao_session_state()
 
+NOME_MESES = {
+            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+            5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+            9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+        }
+
+
+
 # [REFATORADO] Classe auxiliar para encapsular interações com atividades da semana
 class SemanaManager:
     def __init__(self):
@@ -279,6 +287,21 @@ if "unavailable_periods" not in st.session_state:
 if "plantao_itens" not in st.session_state:
     st.session_state["plantao_itens"] = []
 
+def render_selecao_servidores():
+    st.write("### 👥 Servidores para o Plantão")
+    itens = st.session_state.get("plantao_itens", [])
+    if not itens:
+        st.info("ℹ️ Nenhum 👥 servidor encontrado para o plantão.")
+        return
+
+    nomes_disponiveis = [nome for nome, _ in itens]
+    st.multiselect(
+        "Selecione os servidores:",
+        nomes_disponiveis,
+        default=nomes_disponiveis,
+        key="selected_plantao_names"
+    )
+
 # Função para gerar blocos de plantão (Sábado a Sexta)
 def gerar_blocos_sabado_sexta(data_inicio, data_fim, selected_names, itens, unavailable_periods):
     """
@@ -302,79 +325,89 @@ def gerar_blocos_sabado_sexta(data_inicio, data_fim, selected_names, itens, unav
             })
         current_date += timedelta(days=1)
     return blocos
+def render_indisponibilidades():
+    st.subheader("❌ Indisponibilidades")
+    selected_names = st.session_state.get("selected_plantao_names", [])
+    itens = st.session_state.get("plantao_itens", [])
 
-# Função para gerar o HTML da escala para exibição via iframe
-# def gerar_html_para_iframe(blocos, ano, NOME_MESES, titulo_pagina="Escala de Plantão"):
-#     grupos = agrupar_blocos_mensalmente(blocos, NOME_MESES)
-#     html_head = f"""
-#     <html>
-#     <head>
-#     <meta charset="UTF-8">
-#     <title>{titulo_pagina}</title>
-#     <style>
-#         body {{
-#             font-family: "Helvetica", sans-serif;
-#         }}
-#         table {{
-#             border-collapse: collapse;
-#             width: 100%;
-#             margin-bottom: 20px;
-#         }}
-#         th, td {{
-#             border: 1px solid #999;
-#             padding: 6px 10px;
-#             text-align: left;
-#         }}
-#         h2 {{
-#             margin-top: 30px;
-#         }}
-#         @media print {{
-#             #printButton {{
-#                 display: none;
-#             }}
-#         }}
-#     </style>
-#     <script>
-#         function printIframe() {{
-#             window.print();
-#         }}
-#     </script>
-#     </head>
-#     <body>
-#     <h3>{titulo_pagina} IDARON para recebimento de vacinas agrotóxicos e produtos biológicos ({ano})</h3>
-#     """
-#     html_body = ""
-#     chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
-#     for (year, month) in chaves_ordenadas:
-#         nome_mes = NOME_MESES[month]
-#         html_body += f'<h2>{nome_mes} de {year}</h2>\n'
-#         html_body += '<table>\n'
-#         html_body += '<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
-#         for item in grupos[(year, month)]:
-#             data_str = item["Data"]
-#             servidor = item["Servidor"]
-#             contato = item["Contato"]
-#             html_body += f"<tr><td>{data_str}</td><td>{servidor}</td><td>{contato}</td></tr>\n"
-#         html_body += '</table>\n'
+    if not selected_names:
+        st.info("Selecione ao menos um servidor.")
+        return
 
-#     html_body += """
-#     <button id="printButton" onclick="printIframe()">Imprimir</button>
-#     """
+    tabs_inner = st.tabs(selected_names)
 
-#     html_end = """
-#     </body>
-#     </html>
-#     """
-#     return html_head + html_body + html_end
+    for i, tab in enumerate(tabs_inner):
+        with tab:
+            nome_tab = selected_names[i]
+            tel_tab = next((tel for nm, tel in itens if nm == nome_tab), "Sem Telefone")
+            st.write(f"**🧑Nome:** {nome_tab}")
+            st.write(f"**📞Telefone:** {tel_tab}")
+
+            indispo = IndisponibilidadeManager()
+
+            st.subheader("➕❌ Adicionar Período de Indisponibilidade")
+            col_dt1, col_dt2 = st.columns(2)
+            with col_dt1:
+                inicio = st.date_input("Data de Início", key=f"inicio_{nome_tab}", value=date.today())
+            with col_dt2:
+                fim = st.date_input("Data de Fim", key=f"fim_{nome_tab}", value=date.today())
+
+            if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
+                indispo.adicionar_periodo(nome_tab, inicio, fim)
+                st.success(f"Período adicionado para {nome_tab}.")
+
+            st.write("### 📋 Períodos de Indisponibilidade Registrados")
+            periodos = indispo.get_periodos(nome_tab)
+            if periodos:
+                for idx, (start_dt, end_dt) in enumerate(periodos):
+                    colA, colB, colC = st.columns([3, 3, 1])
+                    colA.write(f"**Início:** {start_dt}")
+                    colB.write(f"**Fim:** {end_dt}")
+                    if colC.button("🗑️ Remover", key=f"remover_{nome_tab}_{idx}"):
+                        indispo.remover_periodo(nome_tab, idx)
+                        st.rerun()
+            else:
+                st.info("📭 Nenhum período cadastrado até o momento.")
 
 
 
-# Mapeamento do número do mês para o nome em português
-month_map_pt = {
-    1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
-    5: "maio", 6: "junho", 7: "julho", 8: "agosto",
-    9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
-}
+
+def render_cronograma_plantao():
+    col_cronograma1, col_cronograma2 = st.columns(2)
+    with col_cronograma1:
+        data_cronograma_inicio = st.date_input(
+            "Data inicial do cronograma",
+            value=date.today(),
+            key="cronograma_inicio_plantao"
+        )
+    with col_cronograma2:
+        data_cronograma_fim = st.date_input(
+            "Data final do cronograma",
+            value=date.today(),
+            key="cronograma_fim_plantao"
+        )
+
+    if st.button("⚙️ Gerar Escala", key="gerar_plantao_btn"):
+        if data_cronograma_inicio > data_cronograma_fim:
+            st.error("A data inicial deve ser anterior ou igual à data final.")
+        else:
+            plantao_mgr = PlantaoManager(
+                nomes_selecionados=st.session_state.get("selected_plantao_names", []),
+                itens=st.session_state.get("plantao_itens", []),
+                indisponibilidades=IndisponibilidadeManager().data
+            )
+            blocos = plantao_mgr.gerar_blocos(data_cronograma_inicio, data_cronograma_fim)
+
+            if not blocos:
+                st.warning("⚠️ Não foi possível gerar escala (todos indisponíveis ou sem intervalos).")
+            else:
+                html_iframe = HtmlEscalaRenderer(
+                    blocos=blocos,
+                    nome_meses=NOME_MESES,
+                    titulo_pagina="Relatório de Plantão"
+                ).render()
+                components.html(html_iframe, height=600, scrolling=True)
+
 
 # Lista de ordinal para semanas no mês
 ordinal_names = [
@@ -1138,7 +1171,7 @@ def main_app():
                         if week_position_in_month < 1:
                             week_position_in_month = 1
                         ordinal_name = get_ordinal_week_in_month(week_position_in_month)
-                        month_name_pt = month_map_pt[month]
+                        month_name_pt = [month]
                         labels.append(f"{ordinal_name} semana do mês de {month_name_pt}")
 
                 weeks_tabs = st.tabs(labels)
@@ -1474,141 +1507,46 @@ def main_app():
 
     # ===== Início da aba 3: Plantão =====
     with tab3:
-        # Variável global para nomes dos meses
-        NOME_MESES = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-            5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
-            9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
-
-        # st.title("💉 Plantão - Recebimento de Vacinas, Agrotóxicos e Produtos Biológicos")
-        
-
-        # --- Parte: Plantão (Servidores para Plantão) ---
-        unidade_id = st.session_state.get("selected_unidade_id", None)
-        if unidade_id:
-            res = supabase.table("servidores").select("nome, telefone").eq("escritorio_id", unidade_id).execute()
-            if res.data:
-                st.session_state["plantao_itens"] = [(row["nome"], row["telefone"]) for row in res.data]
+    # --- Parte: Carregamento dos dados dos servidores para o plantão ---
+            unidade_id = st.session_state.get("selected_unidade_id", None)
+            if unidade_id:
+                res = supabase.table("servidores").select("nome, telefone").eq("escritorio_id", unidade_id).execute()
+                if res.data:
+                    st.session_state["plantao_itens"] = [(row["nome"], row["telefone"]) for row in res.data]
+                else:
+                    st.session_state["plantao_itens"] = []
             else:
                 st.session_state["plantao_itens"] = []
-        else:
-            st.session_state["plantao_itens"] = []
 
-        if st.session_state["plantao_itens"]:
-            # Extrai os nomes disponíveis para seleção
-            nomes_disponiveis = [item[0] for item in st.session_state["plantao_itens"]]
-            st.write("### 👥 Servidores para o Plantão")
-            # Aqui o multiselect utiliza a chave "selected_plantao_names"
-            selected = st.multiselect(
-                "Selecione os servidores:",
-                nomes_disponiveis,
-                default=nomes_disponiveis,
-                key="selected_plantao_names"
-            )
-        else:
-            st.info("ℹ️ Nenhum 👥 servidor encontrado para o plantão.")
-        # Usa a mesma chave para recuperar os nomes selecionados
-        itens = st.session_state.get("plantao_itens", [])
-        selected_names = st.session_state.get("selected_plantao_names", [])
+            # --- Seleção dos servidores ---
+            render_selecao_servidores()
 
-        st.write("### 📊 Dados Carregados para o Plantão")
-        with st.expander("Ver tabela selecionada"):
-            col1, col2 = st.columns(2)
-            col1.header("🧑 Nome")
-            col2.header("📞 Telefone")
-            for nome, telefone in itens:
-                if nome in selected_names:
-                    col1.write(nome)
-                    col2.write(telefone)
+            # --- Exibe tabela de servidores selecionados ---
+            itens = st.session_state.get("plantao_itens", [])
+            selected_names = st.session_state.get("selected_plantao_names", [])
 
-        st.divider()
+            st.write("### 📊 Dados Carregados para o Plantão")
+            with st.expander("Ver tabela selecionada"):
+                col1, col2 = st.columns(2)
+                col1.header("🧑 Nome")
+                col2.header("📞 Telefone")
+                for nome, telefone in itens:
+                    if nome in selected_names:
+                        col1.write(nome)
+                        col2.write(telefone)
 
-        # Seção de indisponibilidades
-        with st.expander("Indisponibilidades", expanded=False):
-            st.subheader("❌ Indisponibilidades")
-            if selected_names:
-                tabs_inner = st.tabs(selected_names)
-                for i, tab in enumerate(tabs_inner):
-                    with tab:
-                        nome_tab = selected_names[i]
-                        tel_tab = next((tel for nm, tel in itens if nm == nome_tab), "Sem Telefone")
-                        st.write(f"**🧑Nome:** {nome_tab}")
-                        st.write(f"**📞Telefone:** {tel_tab}")
+            st.divider()
 
-                        # Inicializa a lista de períodos, se necessário
-                        if nome_tab not in st.session_state["unavailable_periods"]:
-                            st.session_state["unavailable_periods"][nome_tab] = []
+            # --- Indisponibilidades ---
+            with st.expander("Indisponibilidades", expanded=False):
+                render_indisponibilidades()
 
-                        st.subheader("➕❌ Adicionar Período de Indisponibilidade")
- 
-                        col_dt1, col_dt2 = st.columns(2)
-                        with col_dt1:
-                            inicio = st.date_input("Data de Início", key=f"inicio_{nome_tab}", value=date.today())
-                        with col_dt2:
-                            fim = st.date_input("Data de Fim", key=f"fim_{nome_tab}", value=date.today())
+            st.divider()
 
-                        if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
-                            IndisponibilidadeManager().adicionar_periodo(nome_tab, inicio, fim)
-                            st.success(f"Período adicionado para {nome_tab}.")
+            # --- Geração da Escala ---
+            st.subheader("🗓️ Gerar Escala de Plantão (Sábado a Sexta)")
+            render_cronograma_plantao()
 
-
-                        st.write("### 📋 Períodos de Indisponibilidade Registrados")
-
-                        # [REFATORADO]
-                        periodos = IndisponibilidadeManager().get_periodos(nome_tab)
-                        if periodos:
-                            for idx, (start_dt, end_dt) in enumerate(periodos):
-                                colA, colB, colC = st.columns([3, 3, 1])
-                                colA.write(f"**Início:** {start_dt}")
-                                colB.write(f"**Fim:** {end_dt}")
-                                if colC.button("🗑️ Remover", key=f"remover_{nome_tab}_{idx}"):
-                                    IndisponibilidadeManager().remover_periodo(nome_tab, idx)
-                                    st.rerun()
-                        else:
-                            st.info("📭 Nenhum período cadastrado até o momento.")
-
-
-
-        st.divider()
-        st.subheader("🗓️ Gerar Escala de Plantão (Sábado a Sexta)")
-        col_cronograma1, col_cronograma2 = st.columns(2)
-        with col_cronograma1:
-            data_cronograma_inicio = st.date_input("Data inicial do cronograma", value=date.today(), key="cronograma_inicio")
-        with col_cronograma2:
-            data_cronograma_fim = st.date_input("Data final do cronograma", value=date.today(), key="cronograma_fim")
-        
-        if st.button("⚙️ Gerar Escala"):
-
-            if data_cronograma_inicio > data_cronograma_fim:
-                st.error("A data inicial deve ser anterior ou igual à data final.")
-            else:
-                plantao_mgr = PlantaoManager(
-                    nomes_selecionados=selected_names,
-                    itens=itens,
-                    indisponibilidades=IndisponibilidadeManager().data
-                )
-                blocos = plantao_mgr.gerar_blocos(data_cronograma_inicio, data_cronograma_fim)
-
-
-                if not blocos:
-                    st.warning("⚠️ Não foi possível gerar escala (todos indisponíveis ou sem intervalos).")
-                else:
-                    ano_escalado = data_cronograma_inicio.year
-                    # html_iframe = gerar_html_para_iframe(
-                    #         blocos,
-                    #         ano=ano_escalado,
-                    #         NOME_MESES=NOME_MESES,
-                    #         titulo_pagina="Relatório de Plantão"
-                    #     )
-                    html_iframe = HtmlEscalaRenderer(
-                        blocos=blocos,
-                        nome_meses=NOME_MESES,
-                        titulo_pagina="Relatório de Plantão"
-                    ).render()
-
-
-                    components.html(html_iframe, height=600, scrolling=True)
     with tab4:
        
         # --- Supabase Config ---
@@ -1699,9 +1637,6 @@ def main_app():
                     )
                 else:
                     st.warning("Nenhum intervalo cadastrado.")
-
-
-
 
 
 if __name__ == "__main__":
