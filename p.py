@@ -715,6 +715,79 @@ def render_botao_gerar_pdf():
         else:
             st.warning("Nenhum intervalo cadastrado.")
 
+            
+def render_filtros_programacao(supabase):
+    st.markdown("### 🎯 Filtros da Programação")
+
+    unidade_id = st.session_state.get("selected_unidade_id", None)
+
+    # --- Servidores ---
+    if unidade_id:
+        res_serv = supabase.table("servidores").select("nome").eq("escritorio_id", unidade_id).execute()
+        nomes_servidores = [s["nome"] for s in res_serv.data] if res_serv.data else []
+    else:
+        nomes_servidores = []
+
+    sel_serv = st.multiselect(
+        "🧑‍💼 Servidores",
+        nomes_servidores,
+        default=nomes_servidores,
+        key="multiselect_servidores_programacao_dados"
+    )
+    st.session_state["servidores"] = sel_serv
+
+    # --- Atividades ---
+    if unidade_id:
+        res_ativ = supabase.table("atividades").select("descricao").eq("escritorio_id", unidade_id).execute()
+        atividades_list = [a["descricao"] for a in res_ativ.data] if res_ativ.data else []
+    else:
+        atividades_list = []
+
+    sel_ativ = st.multiselect(
+        "🗂️ Atividades",
+        atividades_list,
+        default=atividades_list,
+        key="multiselect_atividades"
+    )
+    st.session_state["atividades"] = sel_ativ
+
+    # --- Veículos ---
+    if unidade_id:
+        res_veic = supabase.table("veiculos").select("veiculo").eq("escritorio_id", unidade_id).execute()
+        veiculos_list = [v["veiculo"] for v in res_veic.data] if res_veic.data else []
+    else:
+        veiculos_list = []
+
+    sel_veic = st.multiselect(
+        "🚗 Veículos",
+        veiculos_list,
+        default=veiculos_list,
+        key="multiselect_veiculos"
+    )
+    st.session_state["veiculos"] = sel_veic
+
+    # --- ULSAV/Supervisão ---
+    if unidade_id:
+        res_unidade = supabase.table("unidades").select("nome, supervisao").eq("id", unidade_id).execute()
+        if res_unidade.data:
+            row = res_unidade.data[0]
+            st.session_state["all_ul_sups"] = [row["nome"], row["supervisao"]]
+        else:
+            st.session_state["all_ul_sups"] = []
+    else:
+        st.session_state["all_ul_sups"] = []
+
+    sel_ul_sups = st.multiselect(
+        "📝 ULSAV/Supervisão",
+        st.session_state["all_ul_sups"],
+        default=st.session_state["all_ul_sups"],
+        key="multiselect_ul_sups"
+    )
+    st.session_state["ul_sups"] = sel_ul_sups
+
+
+
+
 def main_app():
   
     # ------------------------------------------------------------------------------
@@ -730,10 +803,7 @@ def main_app():
     # Aba 1: Dados
     # ------------------------------------------------------------------------------
     with tab1:
-        # # Configurações do Supabase
-        # SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wlbvahpkcaksqkzdhnbv.supabase.co")
-        # SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsYnZhaHBrY2Frc3FremRobmJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyODMxMTUsImV4cCI6MjA1ODg1OTExNX0.Cph86UhT8Q67-1x2oVfTFyELgQqWRgJ3yump1JpHSc8")
-        # supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
         supabase = get_supabase_client()
 
         # Função para carregar os escritórios (unidades)
@@ -1120,125 +1190,127 @@ def main_app():
 
     # ===================== INÍCIO DA ABA 2 =====================
     with tab2:
-        col1, col2, col3,col4 = st.columns([2,2,1,1])
-        # --- Coluna 1: Servidores Programação de Atividades ---
-        with col1:
-            unidade_id = st.session_state.get("selected_unidade_id", None)
-            if unidade_id:
-                res_serv = supabase.table("servidores").select("nome").eq("escritorio_id", unidade_id).execute()
-                if res_serv.data:
-                    # Extrai o primeiro nome de cada servidor
-                    # nomes_servidores = [server["nome"].split()[0] for server in res_serv.data]
-                    nomes_servidores = [server["nome"] for server in res_serv.data]
-
-
+        with st.expander("🎯 Filtros da Programação: 🧑‍💼 Servidores | 🗂️ Atividades | 🚗 Veículos | 📝 ULSAV/Supervisão", expanded=False):
+            col1, col2, col3,col4 = st.columns([2,2,1,1])
+            # --- Coluna 1: Servidores Programação de Atividades ---
+            with col1:
+                unidade_id = st.session_state.get("selected_unidade_id", None)
+                if unidade_id:
+                    res_serv = supabase.table("servidores").select("nome").eq("escritorio_id", unidade_id).execute()
+                    if res_serv.data:
+                        # Extrai o primeiro nome de cada servidor
+                        # nomes_servidores = [server["nome"].split()[0] for server in res_serv.data]
+                        nomes_servidores = [server["nome"] for server in res_serv.data]
+                    else:
+                        nomes_servidores = []
                 else:
                     nomes_servidores = []
-            else:
-                nomes_servidores = []
-            
-            st.write("### 🧑‍💼 Servidores")
-            sel_serv = st.multiselect(
-                "Selecione os Servidores",
-                nomes_servidores,
-                default=nomes_servidores,
-                key="multiselect_servidores_programacao_dados"
-            )
-            st.session_state["servidores"] = sel_serv
+                
+                st.write("### 🧑‍💼 Servidores")
 
-        # --- Coluna 2: Atividades ---
-        with col2:
-            unidade_id = st.session_state.get("selected_unidade_id", None)
-            if unidade_id:
-                res_ativ = supabase.table("atividades").select("descricao").eq("escritorio_id", unidade_id).execute()
-                if res_ativ.data:
-                    atividades_list = [atividade["descricao"] for atividade in res_ativ.data]
+                sel_serv = st.multiselect(
+                    "Selecione os Servidores",
+                    nomes_servidores,
+                    default=nomes_servidores,
+                    key="multiselect_servidores_programacao_dados"
+                )
+                st.session_state["servidores"] = sel_serv
+
+            # --- Coluna 2: Atividades ---
+            with col2:
+                unidade_id = st.session_state.get("selected_unidade_id", None)
+                if unidade_id:
+                    res_ativ = supabase.table("atividades").select("descricao").eq("escritorio_id", unidade_id).execute()
+                    if res_ativ.data:
+                        atividades_list = [atividade["descricao"] for atividade in res_ativ.data]
+                    else:
+                        atividades_list = []
                 else:
                     atividades_list = []
-            else:
-                atividades_list = []
 
-            st.write("### 🗂️ Atividades")
-            sel_ativ = st.multiselect(
-                "Selecione as Atividades",
-                atividades_list,
-                default=atividades_list,
-                key="multiselect_atividades"
-            )
-            st.session_state["atividades"] = sel_ativ
+                st.write("### 🗂️ Atividades")
+                sel_ativ = st.multiselect(
+                    "Selecione as Atividades",
+                    atividades_list,
+                    default=atividades_list,
+                    key="multiselect_atividades"
+                )
+                st.session_state["atividades"] = sel_ativ
 
-        # --- Coluna 3: Veículos ---
-        with col3:
-            unidade_id = st.session_state.get("selected_unidade_id", None)
-            if unidade_id:
-                res_veic = supabase.table("veiculos").select("veiculo").eq("escritorio_id", unidade_id).execute()
-                if res_veic.data:
-                    veiculos_list = [veic["veiculo"] for veic in res_veic.data]
+            # --- Coluna 3: Veículos ---
+            with col3:
+                unidade_id = st.session_state.get("selected_unidade_id", None)
+                if unidade_id:
+                    res_veic = supabase.table("veiculos").select("veiculo").eq("escritorio_id", unidade_id).execute()
+                    if res_veic.data:
+                        veiculos_list = [veic["veiculo"] for veic in res_veic.data]
+                    else:
+                        veiculos_list = []
                 else:
                     veiculos_list = []
-            else:
-                veiculos_list = []
 
-            st.write("### 🚗 Veículos")
-            sel_veic = st.multiselect(
-                "Selecione os Veículos",
-                veiculos_list,
-                default=veiculos_list,
-                key="multiselect_veiculos"
-            )
-            st.session_state["veiculos"] = sel_veic
+                st.write("### 🚗 Veículos")
+                sel_veic = st.multiselect(
+                    "Selecione os Veículos",
+                    veiculos_list,
+                    default=veiculos_list,
+                    key="multiselect_veiculos"
+                )
+                st.session_state["veiculos"] = sel_veic
 
-        # # --- Coluna 4: ULSAV e Supervisão ---
-        with col4:
-            unidade_id = st.session_state.get("selected_unidade_id", None)
-            if unidade_id:
-                res_unidade = supabase.table("unidades").select("nome, supervisao").eq("id", unidade_id).execute()
-                if res_unidade.data and len(res_unidade.data) > 0:
-                    row = res_unidade.data[0]
-                    st.session_state["all_ul_sups"] = [row["nome"], row["supervisao"]]
+            # # --- Coluna 4: ULSAV e Supervisão ---
+            with col4:
+                unidade_id = st.session_state.get("selected_unidade_id", None)
+                if unidade_id:
+                    res_unidade = supabase.table("unidades").select("nome, supervisao").eq("id", unidade_id).execute()
+                    if res_unidade.data and len(res_unidade.data) > 0:
+                        row = res_unidade.data[0]
+                        st.session_state["all_ul_sups"] = [row["nome"], row["supervisao"]]
+                    else:
+                        st.session_state["all_ul_sups"] = []
                 else:
                     st.session_state["all_ul_sups"] = []
+
+                st.write("### 📝ULSAV e Supervisão")
+
+                sel_ul_sups = st.multiselect(
+                    "Selecione ULSAV/ Supervisão",
+                    st.session_state["all_ul_sups"],
+                    default=st.session_state["all_ul_sups"],
+                    key="multiselect_ul_sups"
+                )
+                st.session_state["ul_sups"] = sel_ul_sups
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("## 📋 Programação de Atividades", unsafe_allow_html=True)
+
+            if (not st.session_state["servidores"]) or (not st.session_state["atividades"]) or (not st.session_state["veiculos"]):
+                st.warning("Carregue e selecione Servidores, Atividades e Veículos na aba 'Dados'.")
             else:
-                st.session_state["all_ul_sups"] = []
+                for ds, atividades in st.session_state.get("atividades_dia", {}).items():
+                    for atividade in atividades:
+                        if atividade["atividade"] == "Expediente Administrativo":
+                            atividade["servidores"] = [s for s in atividade["servidores"] if s in st.session_state["servidores"]]
 
-            st.write("### 📝ULSAV e Supervisão")
+                st.markdown("##### 📅 Selecione uma data para criar (ou visualizar) a semana correspondente:")
 
-            sel_ul_sups = st.multiselect(
-                "Selecione ULSAV/ Supervisão",
-                st.session_state["all_ul_sups"],
-                default=st.session_state["all_ul_sups"],
-                key="multiselect_ul_sups"
-            )
-            st.session_state["ul_sups"] = sel_ul_sups
+                col_data, col_sabado, col_domingo = st.columns([2, 1, 1])
+                with col_data:
+                    selected_date = st.date_input("Data para a semana:", value=date.today())
+                with col_sabado:
+                    include_saturday = st.checkbox("Incluir Sábado", value=False)
+                    include_sunday = st.checkbox("Incluir Domingo", value=False)
+             
+                if st.button("🗓️Adicionar Semana"):
+                    add_week_if_not_exists(selected_date, include_saturday, include_sunday)
+                    st.session_state["recarregar"] = True
+                    st.rerun()
 
-        st.header("📋 Programação de Atividades")
-        if (not st.session_state["servidores"]) or (not st.session_state["atividades"]) or (not st.session_state["veiculos"]):
-            st.warning("Carregue e selecione Servidores, Atividades e Veículos na aba 'Dados'.")
-        else:
-            # Atualiza os cartões de "Expediente Administrativo" (mantém apenas os servidores ativos)
-            for ds, atividades in st.session_state.get("atividades_dia", {}).items():
-                for atividade in atividades:
-                    if atividade["atividade"] == "Expediente Administrativo":
-                        atividade["servidores"] = [s for s in atividade["servidores"] if s in st.session_state["servidores"]]
+        # 🔚 Volta para o layout total da página
+        st.markdown("---")
 
-            st.write("📅 Selecione uma data para criar (ou visualizar) a semana correspondente:")
-
-            selected_date = st.date_input("Data para a semana:", value=date.today())
-
-            colA, colB = st.columns(2)
-            with colA:
-                include_saturday = st.checkbox("Incluir Sábado", value=False)
-            with colB:
-                include_sunday = st.checkbox("Incluir Domingo", value=False)
-
-            if st.button("🗓️Adicionar Semana"):
-                add_week_if_not_exists(selected_date, include_saturday, include_sunday)
-                st.session_state["recarregar"] = True
-                st.rerun()
-
-            st.markdown("---")
-
-            if st.session_state["week_order"]:
+        if st.session_state["week_order"]:
                 # Gera os rótulos das semanas
                 labels = []
                 if st.session_state["week_order"]:
@@ -1258,7 +1330,7 @@ def main_app():
                         if week_position_in_month < 1:
                             week_position_in_month = 1
                         ordinal_name = get_ordinal_week_in_month(week_position_in_month)
-                        month_name_pt = [month]
+                        month_name_pt = NOME_MESES.get(month, f"[{month}]")
                         labels.append(f"{ordinal_name} semana do mês de {month_name_pt}")
 
                 weeks_tabs = st.tabs(labels)
