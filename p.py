@@ -183,6 +183,74 @@ class PlantaoManager:
 
         return self.blocos
 
+# [REFATORADO] Renderizador HTML para escala de plantão
+class HtmlEscalaRenderer:
+    def __init__(self, blocos, nome_meses, titulo_pagina="Escala de Plantão"):
+        self.blocos = blocos
+        self.nome_meses = nome_meses
+        self.titulo_pagina = titulo_pagina
+
+    def agrupar_por_mes(self):
+        agrupado = {}
+        for bloco in self.blocos:
+            dt_start = bloco["start"]
+            dt_end = bloco["end"]
+            servidor = bloco["servidor"]
+            telefone = bloco["telefone"]
+
+            ano = dt_start.year
+            mes = dt_start.month
+            data_str = f"Do dia {dt_start.strftime('%d/%m/%Y')} ao dia {dt_end.strftime('%d/%m/%Y')}"
+
+            if (ano, mes) not in agrupado:
+                agrupado[(ano, mes)] = []
+
+            agrupado[(ano, mes)].append({
+                "Data": data_str,
+                "Servidor": servidor,
+                "Contato": telefone
+            })
+
+        return dict(sorted(agrupado.items(), key=lambda x: (x[0][0], x[0][1])))
+
+    def render(self):
+        grupos = self.agrupar_por_mes()
+
+        html = f"""<html>
+<head>
+<meta charset="UTF-8">
+<title>{self.titulo_pagina}</title>
+<style>
+    body {{ font-family: Helvetica, sans-serif; }}
+    table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+    th, td {{ border: 1px solid #999; padding: 6px 10px; text-align: left; }}
+    h2 {{ margin-top: 30px; }}
+    @media print {{
+        #printButton {{ display: none; }}
+    }}
+</style>
+<script>
+    function printIframe() {{
+        window.print();
+    }}
+</script>
+</head>
+<body>
+<h3>{self.titulo_pagina} IDARON para recebimento de vacinas agrotóxicos e produtos biológicos</h3>
+"""
+
+        for (ano, mes), itens in grupos.items():
+            nome_mes = self.nome_meses.get(mes, str(mes))
+            html += f'<h2>{nome_mes} de {ano}</h2>\n'
+            html += '<table>\n<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
+            for item in itens:
+                html += f"<tr><td>{item['Data']}</td><td>{item['Servidor']}</td><td>{item['Contato']}</td></tr>\n"
+            html += '</table>\n'
+
+        html += '<button id="printButton" onclick="printIframe()">Imprimir</button>\n'
+        html += '</body></html>'
+
+        return html
 
 
 # [REFATORADO] Gerenciador leve de checkboxes
@@ -236,68 +304,68 @@ def gerar_blocos_sabado_sexta(data_inicio, data_fim, selected_names, itens, unav
     return blocos
 
 # Função para gerar o HTML da escala para exibição via iframe
-def gerar_html_para_iframe(blocos, ano, NOME_MESES, titulo_pagina="Escala de Plantão"):
-    grupos = agrupar_blocos_mensalmente(blocos, NOME_MESES)
-    html_head = f"""
-    <html>
-    <head>
-    <meta charset="UTF-8">
-    <title>{titulo_pagina}</title>
-    <style>
-        body {{
-            font-family: "Helvetica", sans-serif;
-        }}
-        table {{
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 20px;
-        }}
-        th, td {{
-            border: 1px solid #999;
-            padding: 6px 10px;
-            text-align: left;
-        }}
-        h2 {{
-            margin-top: 30px;
-        }}
-        @media print {{
-            #printButton {{
-                display: none;
-            }}
-        }}
-    </style>
-    <script>
-        function printIframe() {{
-            window.print();
-        }}
-    </script>
-    </head>
-    <body>
-    <h3>{titulo_pagina} IDARON para recebimento de vacinas agrotóxicos e produtos biológicos ({ano})</h3>
-    """
-    html_body = ""
-    chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
-    for (year, month) in chaves_ordenadas:
-        nome_mes = NOME_MESES[month]
-        html_body += f'<h2>{nome_mes} de {year}</h2>\n'
-        html_body += '<table>\n'
-        html_body += '<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
-        for item in grupos[(year, month)]:
-            data_str = item["Data"]
-            servidor = item["Servidor"]
-            contato = item["Contato"]
-            html_body += f"<tr><td>{data_str}</td><td>{servidor}</td><td>{contato}</td></tr>\n"
-        html_body += '</table>\n'
+# def gerar_html_para_iframe(blocos, ano, NOME_MESES, titulo_pagina="Escala de Plantão"):
+#     grupos = agrupar_blocos_mensalmente(blocos, NOME_MESES)
+#     html_head = f"""
+#     <html>
+#     <head>
+#     <meta charset="UTF-8">
+#     <title>{titulo_pagina}</title>
+#     <style>
+#         body {{
+#             font-family: "Helvetica", sans-serif;
+#         }}
+#         table {{
+#             border-collapse: collapse;
+#             width: 100%;
+#             margin-bottom: 20px;
+#         }}
+#         th, td {{
+#             border: 1px solid #999;
+#             padding: 6px 10px;
+#             text-align: left;
+#         }}
+#         h2 {{
+#             margin-top: 30px;
+#         }}
+#         @media print {{
+#             #printButton {{
+#                 display: none;
+#             }}
+#         }}
+#     </style>
+#     <script>
+#         function printIframe() {{
+#             window.print();
+#         }}
+#     </script>
+#     </head>
+#     <body>
+#     <h3>{titulo_pagina} IDARON para recebimento de vacinas agrotóxicos e produtos biológicos ({ano})</h3>
+#     """
+#     html_body = ""
+#     chaves_ordenadas = sorted(grupos.keys(), key=lambda x: (x[0], x[1]))
+#     for (year, month) in chaves_ordenadas:
+#         nome_mes = NOME_MESES[month]
+#         html_body += f'<h2>{nome_mes} de {year}</h2>\n'
+#         html_body += '<table>\n'
+#         html_body += '<tr><th>Data</th><th>Servidor</th><th>Contato</th></tr>\n'
+#         for item in grupos[(year, month)]:
+#             data_str = item["Data"]
+#             servidor = item["Servidor"]
+#             contato = item["Contato"]
+#             html_body += f"<tr><td>{data_str}</td><td>{servidor}</td><td>{contato}</td></tr>\n"
+#         html_body += '</table>\n'
 
-    html_body += """
-    <button id="printButton" onclick="printIframe()">Imprimir</button>
-    """
+#     html_body += """
+#     <button id="printButton" onclick="printIframe()">Imprimir</button>
+#     """
 
-    html_end = """
-    </body>
-    </html>
-    """
-    return html_head + html_body + html_end
+#     html_end = """
+#     </body>
+#     </html>
+#     """
+#     return html_head + html_body + html_end
 
 
 
@@ -529,54 +597,6 @@ def agrupar_blocos_mensalmente(blocos, NOME_MESES):
         })
     return grupos
 
-def gerar_blocos_sabado_sexta(data_inicio, data_fim, nomes_selecionados, itens, indisponibilidades):
-    dict_telefones = {nome: tel for (nome, tel) in itens}
-    blocos = []
-
-    sabado_inicial = alinhar_sabado_ou_proximo(data_inicio)
-    if sabado_inicial > data_fim:
-        return blocos
-
-    idx_servidor = 0
-    data_corrente = sabado_inicial
-
-    while data_corrente <= data_fim:
-        fim_bloco = data_corrente + timedelta(days=6)
-        if fim_bloco > data_fim:
-            fim_bloco = data_fim
-
-        servidor_escolhido = None
-        tentativas = 0
-        while tentativas < len(nomes_selecionados):
-            nome_atual = nomes_selecionados[idx_servidor]
-            if not servidor_indisponivel(nome_atual, data_corrente, fim_bloco, indisponibilidades):
-                servidor_escolhido = nome_atual
-                idx_servidor = (idx_servidor + 1) % len(nomes_selecionados)
-                break
-            else:
-                idx_servidor = (idx_servidor + 1) % len(nomes_selecionados)
-                tentativas += 1
-
-        if servidor_escolhido is None:
-            blocos.append({
-                "start": data_corrente,
-                "end": fim_bloco,
-                "servidor": "— Sem Servidor —",
-                "telefone": ""
-            })
-        else:
-            tel = dict_telefones.get(servidor_escolhido, "")
-            blocos.append({
-                "start": data_corrente,
-                "end": fim_bloco,
-                "servidor": servidor_escolhido,
-                "telefone": tel
-            })
-
-        data_corrente = fim_bloco + timedelta(days=1)
-        data_corrente = alinhar_sabado_ou_proximo(data_corrente)
-
-    return blocos
 def main_app():
   
     # ------------------------------------------------------------------------------
@@ -1575,12 +1595,18 @@ def main_app():
                     st.warning("⚠️ Não foi possível gerar escala (todos indisponíveis ou sem intervalos).")
                 else:
                     ano_escalado = data_cronograma_inicio.year
-                    html_iframe = gerar_html_para_iframe(
-                            blocos,
-                            ano=ano_escalado,
-                            NOME_MESES=NOME_MESES,
-                            titulo_pagina="Relatório de Plantão"
-                        )
+                    # html_iframe = gerar_html_para_iframe(
+                    #         blocos,
+                    #         ano=ano_escalado,
+                    #         NOME_MESES=NOME_MESES,
+                    #         titulo_pagina="Relatório de Plantão"
+                    #     )
+                    html_iframe = HtmlEscalaRenderer(
+                        blocos=blocos,
+                        nome_meses=NOME_MESES,
+                        titulo_pagina="Relatório de Plantão"
+                    ).render()
+
 
                     components.html(html_iframe, height=600, scrolling=True)
     with tab4:
