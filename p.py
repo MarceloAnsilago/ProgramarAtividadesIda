@@ -121,6 +121,67 @@ class IndisponibilidadeManager:
         if nome in self.data and 0 <= idx < len(self.data[nome]):
             self.data[nome].pop(idx)
 
+# [REFATORADO] Gerenciador da geração de plantões
+class PlantaoManager:
+    def __init__(self, nomes_selecionados, itens, indisponibilidades):
+        self.nomes = nomes_selecionados
+        self.telefones = {nome: tel for nome, tel in itens}
+        self.indisponibilidades = indisponibilidades
+        self.blocos = []
+
+    def alinhar_para_sabado(self, data_ref):
+        dia_semana = data_ref.weekday()
+        diff = 5 - dia_semana if dia_semana <= 5 else 6
+        return data_ref + timedelta(days=diff)
+
+    def esta_indisponivel(self, nome, ini_bloco, fim_bloco):
+        if nome not in self.indisponibilidades:
+            return False
+        for ini_ind, fim_ind in self.indisponibilidades[nome]:
+            if not (fim_bloco < ini_ind or ini_bloco > fim_ind):
+                return True
+        return False
+
+    def gerar_blocos(self, data_inicio, data_fim):
+        if not self.nomes:
+            return []
+
+        data_corrente = self.alinhar_para_sabado(data_inicio)
+        if data_corrente > data_fim:
+            return []
+
+        idx = 0
+        while data_corrente <= data_fim:
+            fim_bloco = min(data_corrente + timedelta(days=6), data_fim)
+            servidor_escolhido = None
+
+            tentativas = 0
+            while tentativas < len(self.nomes):
+                nome_atual = self.nomes[idx]
+                if not self.esta_indisponivel(nome_atual, data_corrente, fim_bloco):
+                    servidor_escolhido = nome_atual
+                    idx = (idx + 1) % len(self.nomes)
+                    break
+                idx = (idx + 1) % len(self.nomes)
+                tentativas += 1
+
+            if servidor_escolhido:
+                telefone = self.telefones.get(servidor_escolhido, "")
+            else:
+                servidor_escolhido = "— Sem Servidor —"
+                telefone = ""
+
+            self.blocos.append({
+                "start": data_corrente,
+                "end": fim_bloco,
+                "servidor": servidor_escolhido,
+                "telefone": telefone
+            })
+
+            data_corrente = fim_bloco + timedelta(days=1)
+            data_corrente = self.alinhar_para_sabado(data_corrente)
+
+        return self.blocos
 
 
 
@@ -1467,9 +1528,6 @@ def main_app():
                         with col_dt2:
                             fim = st.date_input("Data de Fim", key=f"fim_{nome_tab}", value=date.today())
 
-                        # if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
-                        #     st.session_state["unavailable_periods"][nome_tab].append((inicio, fim))
-                        #     st.success(f"Período adicionado para {nome_tab}.")
                         if st.button("➕ Adicionar Período", key=f"btn_{nome_tab}"):
                             IndisponibilidadeManager().adicionar_periodo(nome_tab, inicio, fim)
                             st.success(f"Período adicionado para {nome_tab}.")
@@ -1505,13 +1563,14 @@ def main_app():
             if data_cronograma_inicio > data_cronograma_fim:
                 st.error("A data inicial deve ser anterior ou igual à data final.")
             else:
-                blocos = gerar_blocos_sabado_sexta(
-                    data_cronograma_inicio,
-                    data_cronograma_fim,
-                    selected_names,
-                    itens,
-                    st.session_state["unavailable_periods"]
+                plantao_mgr = PlantaoManager(
+                    nomes_selecionados=selected_names,
+                    itens=itens,
+                    indisponibilidades=IndisponibilidadeManager().data
                 )
+                blocos = plantao_mgr.gerar_blocos(data_cronograma_inicio, data_cronograma_fim)
+
+
                 if not blocos:
                     st.warning("⚠️ Não foi possível gerar escala (todos indisponíveis ou sem intervalos).")
                 else:
