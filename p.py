@@ -51,19 +51,72 @@ st.markdown("""
 # Sessão e Estruturas de Dados
 # ------------------------------------------------------------------------------
 def init_plantao_session_state():
-    st.session_state.setdefault("semanas", {})  # chave: "YYYY-WW" -> lista de datas
-    st.session_state.setdefault("week_order", [])  # ordem de criação das semanas
-    st.session_state.setdefault("atividades_dia", {})  # chave: "dd/mm/yyyy" -> lista de atividades
-    st.session_state.setdefault("unavailable_periods", {})  # indisponibilidades por servidor
-    st.session_state.setdefault("plantao_itens", [])  # escala gerada
-    st.session_state.setdefault("checklist", {})  # controle de impressão (atividades/servidores marcados)
-    st.session_state.setdefault("all_servidores", [])  # lista carregada de servidores
+    st.session_state.setdefault("semanas", {})
+    st.session_state.setdefault("week_order", [])
+    st.session_state.setdefault("atividades_dia", {})
+    st.session_state.setdefault("unavailable_periods", {})
+    st.session_state.setdefault("plantao_itens", [])
+    st.session_state.setdefault("checklist", {})
+    st.session_state.setdefault("all_servidores", [])
     st.session_state.setdefault("servidores", [])
-    st.session_state.setdefault("all_atividades", [])  # lista de atividades disponíveis
-    st.session_state.setdefault("all_veiculos", [])  # lista de veículos cadastrados
-    st.session_state.setdefault("all_ul_sups", [])  # lista de supervisões/unidades se necessário
+    st.session_state.setdefault("all_atividades", [])
+    st.session_state.setdefault("all_veiculos", [])
+    st.session_state.setdefault("all_ul_sups", [])
+    
+    # [NOVO] Session compacta para checkboxes
+    st.session_state.setdefault("checkbox_off", {})
 
 init_plantao_session_state()
+
+# [REFATORADO] Classe auxiliar para encapsular interações com atividades da semana
+class SemanaManager:
+    def __init__(self):
+        self.dados = st.session_state.setdefault("atividades_dia", {})
+
+    def get_dia(self, data_str):
+        return self.dados.setdefault(data_str, [])
+
+    def add_atividade(self, data_str, atividade, servidores, veiculo):
+        self.get_dia(data_str).append({
+            "atividade": atividade,
+            "servidores": servidores,
+            "veiculo": veiculo
+        })
+
+    def remover_atividade(self, data_str, idx):
+        atividade = self.dados.get(data_str, [])[idx]
+        for s in atividade["servidores"]:
+            self.adicionar_no_expediente(data_str, s)
+        del self.dados[data_str][idx]
+
+    def remover_servidor(self, data_str, idx, servidor):
+        atividade = self.dados.get(data_str, [])[idx]
+        if atividade["atividade"] != "Expediente Administrativo":
+            if servidor in atividade["servidores"]:
+                atividade["servidores"].remove(servidor)
+                self.adicionar_no_expediente(data_str, servidor)
+
+    def adicionar_no_expediente(self, data_str, servidor):
+        for atividade in self.dados.get(data_str, []):
+            if atividade["atividade"] == "Expediente Administrativo":
+                if servidor not in atividade["servidores"]:
+                    atividade["servidores"].append(servidor)
+                return
+
+
+# [REFATORADO] Gerenciador leve de checkboxes
+def is_checkbox_checked(date_str, tipo, idx, nome=None):
+    key = f"{tipo}_{idx}" if nome is None else f"{tipo}_{idx}_{nome}"
+    return not st.session_state.get("checkbox_off", {}).get(date_str, {}).get(key, False)
+
+def set_checkbox_unchecked(date_str, tipo, idx, nome=None):
+    key = f"{tipo}_{idx}" if nome is None else f"{tipo}_{idx}_{nome}"
+    if "checkbox_off" not in st.session_state:
+        st.session_state["checkbox_off"] = {}
+    if date_str not in st.session_state["checkbox_off"]:
+        st.session_state["checkbox_off"][date_str] = {}
+    st.session_state["checkbox_off"][date_str][key] = True
+
 
 if st.session_state.get("recarregar", False):
     st.session_state["recarregar"] = False
@@ -234,15 +287,12 @@ def add_week_if_not_exists(ref_date, include_saturday=False, include_sunday=Fals
             )
 
 
+# [REFATORADO]
 def add_activity_to_date(activity_date, atividade, servidores, veiculo):
     date_str = activity_date.strftime("%d/%m/%Y")
-    if date_str not in st.session_state["atividades_dia"]:
-        st.session_state["atividades_dia"][date_str] = []
-    st.session_state["atividades_dia"][date_str].append({
-        "atividade": atividade,
-        "servidores": servidores,
-        "veiculo": veiculo
-    })
+    SemanaManager().add_atividade(date_str, atividade, servidores, veiculo)
+
+
 
 def add_server_to_expediente(date_str, server):
     for act in st.session_state["atividades_dia"].get(date_str, []):
@@ -251,21 +301,16 @@ def add_server_to_expediente(date_str, server):
                 act["servidores"].append(server)
             return
 
-
+# [REFATORADO]
 def remove_server_from_card(date_str, card_index, server):
-    card = st.session_state["atividades_dia"][date_str][card_index]
-    if card["atividade"] != "Expediente Administrativo":
-        if server in card["servidores"]:
-            card["servidores"].remove(server)
-            add_server_to_expediente(date_str, server)
+    SemanaManager().remover_servidor(date_str, card_index, server)
 
-
-
+# [REFATORADO]
 def remove_activity_card(date_str, card_index):
-    card = st.session_state["atividades_dia"][date_str][card_index]
-    for server in card["servidores"]:
-        add_server_to_expediente(date_str, server)
-    del st.session_state["atividades_dia"][date_str][card_index]
+    SemanaManager().remover_atividade(date_str, card_index)
+
+
+
 
 def remove_week(week_id):
     if week_id in st.session_state["semanas"]:
@@ -303,83 +348,65 @@ def get_summary_details_for_week(week_id):
 # --------------------------------------------------
 # FUNÇÕES AUXILIARES PARA IMPRESSÃO
 # --------------------------------------------------
+
+# [REFATORADO]
 def build_cards_list(week_dates):
-    """
-    Retorna uma lista de dias (cards_list), onde cada dia contém apenas
-    as atividades e servidores que estão marcados nos checkboxes.
-    """
     cards_list = []
+    semana = SemanaManager()
+
     for day_date in week_dates:
         date_str = day_date.strftime("%d/%m/%Y")
         day_name_en = day_date.strftime("%A")
         day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
-
-        day_acts = st.session_state["atividades_dia"].get(date_str, [])
         filtered_acts = []
 
-        for act_idx, act in enumerate(day_acts):
-            # 1) Se a atividade NÃO for "Expediente Administrativo", verificar se o checkbox da atividade está marcado
+        for act_idx, act in enumerate(semana.get_dia(date_str)):
             if act["atividade"] != "Expediente Administrativo":
-                act_key = f"checkbox_atividade_{date_str}_{act_idx}"
-                if not st.session_state.get(act_key, True):
-                    # Se estiver desmarcada, pula essa atividade
+                if not is_checkbox_checked(date_str, "atividade", act_idx):
                     continue
 
-            # 2) Filtrar servidores marcados
-            filtered_servers = []
-            for s in act["servidores"]:
-                server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
-                # Se o checkbox do servidor estiver marcado (ou não existir, por padrão True), inclui
-                if st.session_state.get(server_key, True):
-                    filtered_servers.append(s)
+            filtered_servers = [
+                s for s in act["servidores"]
+                if is_checkbox_checked(date_str, "servidor", act_idx, s)
+            ]
 
-            # Se não for Exp. Administrativo e não sobrou nenhum servidor, podemos pular
             if act["atividade"] != "Expediente Administrativo" and not filtered_servers:
                 continue
 
-            # Monta uma nova atividade com os servidores filtrados
-            new_act = {
+            filtered_acts.append({
                 "atividade": act["atividade"],
                 "servidores": filtered_servers,
                 "veiculo": act["veiculo"]
-            }
-            filtered_acts.append(new_act)
+            })
 
         cards_list.append({
             "Dia": day_label,
             "Activities": filtered_acts
         })
+
     return cards_list
 
-
+# [REFATORADO]
 def build_atividades_por_servidor(week_dates):
-    """
-    Retorna um dicionário {servidor: [lista de atividades]} apenas com
-    o que estiver marcado nos checkboxes (e ignorando "Expediente Administrativo").
-    """
     atividades_por_servidor = {}
+    semana = SemanaManager()
+
     for day_date in week_dates:
         date_str = day_date.strftime("%d/%m/%Y")
-        day_acts = st.session_state["atividades_dia"].get(date_str, [])
-        for act_idx, act in enumerate(day_acts):
+        for act_idx, act in enumerate(semana.get_dia(date_str)):
             if act["atividade"] != "Expediente Administrativo":
-                # Verifica se a atividade está marcada
-                act_key = f"checkbox_atividade_{date_str}_{act_idx}"
-                if not st.session_state.get(act_key, True):
-                    continue  # pula se a atividade foi desmarcada
-
-                # Filtra servidores marcados
+                if not is_checkbox_checked(date_str, "atividade", act_idx):
+                    continue
                 for s in act["servidores"]:
-                    server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
-                    if st.session_state.get(server_key, True):
+                    if is_checkbox_checked(date_str, "servidor", act_idx, s):
                         if s not in atividades_por_servidor:
                             atividades_por_servidor[s] = []
                         atividades_por_servidor[s].append({
                             "Data": date_str,
                             "Atividade": act["atividade"]
                         })
+
     return atividades_por_servidor
-# # === 1) Defina as funções auxiliares fora do bloco with tab3 ===
 
 def alinhar_sabado_ou_proximo(data_ref):
     dia_semana = data_ref.weekday()
@@ -1181,11 +1208,19 @@ def main_app():
                                     for act_idx, atividade in enumerate(day_acts):
                                         st.markdown(f"##### Atividade: {atividade['atividade']}")
                                         if atividade["atividade"] != "Expediente Administrativo":
+                                            # activity_checked = st.checkbox(
+                                            #     f"Marcar atividade: {atividade['atividade']}",
+                                            #     value=True,
+                                            #     key=f"checkbox_atividade_{ds}_{act_idx}",
+                                            #     help="Desmarque para remover essa atividade."
+                                            # )
+                                            # [REFATORADO]
                                             activity_checked = st.checkbox(
                                                 f"Marcar atividade: {atividade['atividade']}",
-                                                value=True,
+                                                value=is_checkbox_checked(ds, "atividade", act_idx),
                                                 key=f"checkbox_atividade_{ds}_{act_idx}",
-                                                help="Desmarque para remover essa atividade."
+                                                on_change=set_checkbox_unchecked,
+                                                args=(ds, "atividade", act_idx)
                                             )
                                             if not activity_checked:
                                                 remove_activity_card(ds, act_idx)
@@ -1195,11 +1230,21 @@ def main_app():
 
                                             for s in atividade["servidores"][:]:
                                                 key_server = f"checkbox_servidor_{ds}_{act_idx}_{s}"
+                                                # server_checked = st.checkbox(
+                                                #     s,
+                                                #     value=True,
+                                                #     key=key_server,
+                                                #     help="Desmarque para remover da atividade e retornar ao Expediente Administrativo."
+                                                # )
+
+ 
+                                                # [REFATORADO]
                                                 server_checked = st.checkbox(
                                                     s,
-                                                    value=True,
+                                                    value=is_checkbox_checked(ds, "servidor", act_idx, s),
                                                     key=key_server,
-                                                    help="Desmarque para remover da atividade e retornar ao Expediente Administrativo."
+                                                    on_change=set_checkbox_unchecked,
+                                                    args=(ds, "servidor", act_idx, s)
                                                 )
                                                 if not server_checked:
                                                     remove_server_from_card(ds, act_idx, s)
