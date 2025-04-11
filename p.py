@@ -435,14 +435,15 @@ def get_ordinal_week_in_month(n: int) -> str:
         return f"{n}ª"
 
 # Dias da semana em português (para exibição)
+
 dias_semana = {
-    "Monday": "Segunda-feira",
-    "Tuesday": "Terça-feira",
-    "Wednesday": "Quarta-feira",
-    "Thursday": "Quinta-feira",
-    "Friday": "Sexta-feira",
-    "Saturday": "Sábado",
-    "Sunday": "Domingo"
+    0: "Segunda-feira",
+    1: "Terça-feira",
+    2: "Quarta-feira",
+    3: "Quinta-feira",
+    4: "Sexta-feira",
+    5: "Sábado",
+    6: "Domingo"
 }
 
 
@@ -869,10 +870,12 @@ def main_app():
             
             st.write("---")
             st.subheader("➕ Cadastrar Novo Servidor")
+
             # Carrega escritórios para escolha
             lista_escritorios = get_escritorios()
             dict_escritorios = {esc["nome"]: esc["id"] for esc in lista_escritorios}
             nomes_escritorios = list(dict_escritorios.keys())
+
             # Se a unidade já foi selecionada, usa-a; caso contrário, permite escolha
             if unidade_id:
                 st.write(f"Escritório: {st.session_state.get('selected_unidade')}")
@@ -880,28 +883,41 @@ def main_app():
             else:
                 esc_escolhido_nome = st.selectbox("Escritório", nomes_escritorios, key="esc_escolhido_servidor")
                 chosen_esc_id = dict_escritorios[esc_escolhido_nome]
+
             with st.form("cadastro_servidor"):
-                novo_nome = st.text_input("Nome do Servidor", key="novo_nome_servidor")
-                novo_telefone = st.text_input("Telefone", key="novo_telefone_servidor")
-                nova_matricula = st.text_input("Matrícula", key="nova_matricula_servidor")
-                novo_cargo = st.text_input("Cargo", key="novo_cargo_servidor")
+                novo_nome = st.text_input("Nome do Servidor", key="novo_nome_servidor").strip()
+                novo_telefone = st.text_input("Telefone", key="novo_telefone_servidor").strip()
+                nova_matricula = st.text_input("Matrícula", key="nova_matricula_servidor").strip()
+                novo_cargo = st.text_input("Cargo", key="novo_cargo_servidor").strip()
                 status_servidor = st.checkbox("Ativo?", value=True, key="status_servidor_cadastro")
                 submit_cadastro_serv = st.form_submit_button("➕ Cadastrar Servidor")
+
             if submit_cadastro_serv:
-                status_val = "Ativo" if status_servidor else "Inativo"
-                insert_res = supabase.table("servidores").insert({
-                    "nome": novo_nome,
-                    "telefone": novo_telefone,
-                    "matricula": nova_matricula,
-                    "cargo": novo_cargo,
-                    "status": status_val,
-                    "escritorio_id": chosen_esc_id
-                }).execute()
-                if insert_res.data:
-                    st.success("✅ Servidor cadastrado com sucesso!")
-                    st.rerun()
+                # VALIDAÇÕES
+                if not novo_nome:
+                    st.error("❌ O nome do servidor é obrigatório.")
+                elif not novo_telefone:
+                    st.error("❌ O telefone é obrigatório.")
+                elif not nova_matricula:
+                    st.error("❌ A matrícula é obrigatória.")
+                elif not novo_cargo:
+                    st.error("❌ O cargo é obrigatório.")
                 else:
-                    st.error("❌ Erro ao cadastrar o servidor. {insert_res.error}")
+                    status_val = "Ativo" if status_servidor else "Inativo"
+                    insert_res = supabase.table("servidores").insert({
+                        "nome": novo_nome,
+                        "telefone": novo_telefone,
+                        "matricula": nova_matricula,
+                        "cargo": novo_cargo,
+                        "status": status_val,
+                        "escritorio_id": chosen_esc_id
+                    }).execute()
+                    if insert_res.data:
+                        st.success("✅ Servidor cadastrado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Erro ao cadastrar o servidor: {insert_res.error}")
+
             st.write("---")
             st.subheader("✏️ Editar Servidor Existente")
             if unidade_id:
@@ -943,46 +959,59 @@ def main_app():
 
         # -------- ABA 2: Atividades --------
         with tabs_crud[1]:
+         
             st.header("Gerenciamento de Atividades")
+
             if unidade_id:
                 res_ativ = supabase.table("atividades").select("*").eq("escritorio_id", unidade_id).execute()
             else:
                 res_ativ = supabase.table("atividades").select("*").execute()
+
             if res_ativ.data:
                 st.subheader("Atividades Cadastradas")
                 st.dataframe(res_ativ.data)
             else:
                 st.info("Nenhuma atividade cadastrada.")
+
             st.write("---")
             st.subheader("Cadastrar Nova Atividade")
+
             lista_escritorios_ativ = get_escritorios()
             dict_escritorios_ativ = {esc["nome"]: esc["id"] for esc in lista_escritorios_ativ}
             nomes_escritorios_ativ = list(dict_escritorios_ativ.keys())
+
             if unidade_id:
                 st.write(f"Escritório: {st.session_state.get('selected_unidade')}")
                 chosen_esc_ativ = unidade_id
             else:
                 esc_nome_ativ = st.selectbox("Escritório", nomes_escritorios_ativ, key="esc_ativ_cadastro")
                 chosen_esc_ativ = dict_escritorios_ativ[esc_nome_ativ]
+
             with st.form("cadastro_atividade"):
-                desc_atividade = st.text_input("Descrição", key="desc_atividade")
+                desc_atividade = st.text_input("Descrição", key="desc_atividade").strip()
                 data_atividade = st.date_input("Data", key="data_atividade")
                 status_atividade = st.checkbox("Ativo?", value=True, key="status_atividade_cadastro")
                 submit_cadastro_ativ = st.form_submit_button("Cadastrar Atividade")
+
             if submit_cadastro_ativ:
-                status_val = "Ativo" if status_atividade else "Inativo"
-                insert_res = supabase.table("atividades").insert({
-                    "descricao": desc_atividade,
-                    "data": data_atividade.isoformat(),
-                    "status": status_val,
-                    "escritorio_id": chosen_esc_ativ
-                }).execute()
-                if insert_res.data:
-                    st.success("Atividade cadastrada com sucesso!")
-                    st.rerun()
+                if not desc_atividade:
+                    st.error("❌ A descrição da atividade é obrigatória.")
                 else:
-                    st.error(f"Erro ao cadastrar a atividade: {insert_res.error}")
+                    status_val = "Ativo" if status_atividade else "Inativo"
+                    insert_res = supabase.table("atividades").insert({
+                        "descricao": desc_atividade,
+                        "data": data_atividade.isoformat(),
+                        "status": status_val,
+                        "escritorio_id": chosen_esc_ativ
+                    }).execute()
+                    if insert_res.data:
+                        st.success("✅ Atividade cadastrada com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Erro ao cadastrar a atividade: {insert_res.error}")
+
             st.write("---")
+
             st.subheader("Editar Atividade Existente")
             if unidade_id:
                 res_edit_ativ = supabase.table("atividades").select("*").eq("escritorio_id", unidade_id).execute()
@@ -1060,32 +1089,41 @@ def main_app():
             else:
                 st.info("Nenhum veículo cadastrado.")
             st.write("---")
+       
             st.subheader("Cadastrar Novo Veículo")
+
             lista_escritorios_veic = get_escritorios()
             dict_escritorios_veic = {esc["nome"]: esc["id"] for esc in lista_escritorios_veic}
             nomes_escritorios_veic = list(dict_escritorios_veic.keys())
+
             if unidade_id:
                 st.write(f"Escritório: {st.session_state.get('selected_unidade')}")
                 chosen_esc_veic = unidade_id
             else:
                 esc_nome_veic = st.selectbox("Escritório", nomes_escritorios_veic, key="esc_veic_cadastro")
                 chosen_esc_veic = dict_escritorios_veic[esc_nome_veic]
+
             with st.form("cadastro_veiculo"):
-                nome_veic = st.text_input("Nome do Veículo", key="nome_veiculo")
+                nome_veic = st.text_input("Nome do Veículo", key="nome_veiculo").strip()
                 status_veic = st.checkbox("Ativo?", value=True, key="status_veiculo_cadastro")
                 submit_cadastro_veic = st.form_submit_button("Cadastrar Veículo")
+
             if submit_cadastro_veic:
-                status_val = "Ativo" if status_veic else "Inativo"
-                insert_veic = supabase.table("veiculos").insert({
-                    "veiculo": nome_veic,
-                    "status": status_val,
-                    "escritorio_id": chosen_esc_veic
-                }).execute()
-                if insert_veic.data:
-                    st.success("Veículo cadastrado com sucesso!")
-                    st.rerun()
+                if not nome_veic:
+                    st.error("❌ O nome do veículo é obrigatório.")
                 else:
-                    st.error(f"Erro ao cadastrar o veículo: {insert_veic.error}")
+                    status_val = "Ativo" if status_veic else "Inativo"
+                    insert_veic = supabase.table("veiculos").insert({
+                        "veiculo": nome_veic,
+                        "status": status_val,
+                        "escritorio_id": chosen_esc_veic
+                    }).execute()
+                    if insert_veic.data:
+                        st.success("✅ Veículo cadastrado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Erro ao cadastrar o veículo: {insert_veic.error}")
+
             st.write("---")
             st.subheader("Editar Veículo Existente")
             if unidade_id:
@@ -1355,7 +1393,8 @@ def main_app():
                                 st.rerun()
 
                         week_dates = st.session_state["semanas"][wid]
-                        day_options = [f"{dias_semana[d.strftime('%A')]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
+                        # day_options = [f"{dias_semana[d.strftime('%A')]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
+                        day_options = [f"{dias_semana[d.weekday()]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
                         option_to_date = {option: d for option, d in zip(day_options, week_dates)}
 
                         with top_col2:
@@ -1673,6 +1712,10 @@ def main_app():
 
     # ===== Início da aba 3: Plantão =====
     with tab3:
+                # Layout geral com colunas
+        col_esq, col_centro, col_dir = st.columns([1, 1.5, 1])   
+        # Parte centralizada
+        with col_centro:
     # --- Parte: Carregamento dos dados dos servidores para o plantão ---
             unidade_id = st.session_state.get("selected_unidade_id", None)
             if unidade_id:
@@ -1702,24 +1745,26 @@ def main_app():
                         col2.write(telefone)
 
             st.divider()
-
+        st.markdown("#### 🔄 Informe os servidores que estão de férias ou afastados e gere a escala)")
             # --- Indisponibilidades ---
-            with st.expander("Indisponibilidades", expanded=False):
+        with st.expander("Indisponibilidades", expanded=False):
                 render_indisponibilidades()
 
-            st.divider()
+        st.divider()
 
             # --- Geração da Escala ---
-            st.subheader("🗓️ Gerar Escala de Plantão (Sábado a Sexta)")
-            render_cronograma_plantao()
+        st.subheader("🗓️ Gerar Escala de Plantão (Sábado a Sexta)")
+        render_cronograma_plantao()
 
     with tab4:
-       
-        supabase = get_supabase_client()
-        render_formulario_ferias(supabase)
-        render_tabela_ferias()
-        render_botao_gerar_pdf()
-    
+            col_esq, col_centro, col_dir = st.columns([1, 1.5, 1])   
+            with col_centro:
+               
+                supabase = get_supabase_client()
+                render_formulario_ferias(supabase)
+                render_tabela_ferias()
+                render_botao_gerar_pdf()
+            
     with tab5: 
             col_esq, col_centro, col_dir = st.columns([1, 1.5, 1])   
             with col_centro:

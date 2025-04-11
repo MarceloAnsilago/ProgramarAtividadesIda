@@ -137,7 +137,8 @@ def generate_pdf_for_week(cards, week_desc, ulsav_name, supervisao_name, plantao
         day_activities = day_info["Activities"]
         for act in day_activities:
             atividade_nome = act["atividade"]
-            servidores_str = ", ".join(s.split()[0] for s in act["servidores"]) if act["servidores"] else "Nenhum"
+            servidores_str = ", ".join(s.split()[0] for s in act["servidores"] if s and s.strip()) if act["servidores"] else "Nenhum"
+
             realizada_str = "[   ] Sim   [   ] Não"
 
             # Cabeçalho de 3 colunas
