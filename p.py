@@ -12,14 +12,10 @@ import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime, date
 import datetime as dt
-
-import streamlit as st
 import locale
-import pandas as pd
 from st_aggrid import AgGrid, GridOptionsBuilder
-from datetime import datetime
 from babel.numbers import format_currency
-import streamlit.components.v1 as components
+
 
 # ------------------------------------------------------------------------------
 # CSS para personalizar estilos
@@ -436,16 +432,17 @@ def get_ordinal_week_in_month(n: int) -> str:
 
 # Dias da semana em português (para exibição)
 
-dias_semana = {
-    0: "Segunda-feira",
-    1: "Terça-feira",
-    2: "Quarta-feira",
-    3: "Quinta-feira",
-    4: "Sexta-feira",
-    5: "Sábado",
-    6: "Domingo"
-}
-
+def dia_semana_pt(data):
+    dias_semana = {
+        0: "Segunda-feira",
+        1: "Terça-feira",
+        2: "Quarta-feira",
+        3: "Quinta-feira",
+        4: "Sexta-feira",
+        5: "Sábado",
+        6: "Domingo"
+    }
+    return dias_semana.get(data.weekday(), "Desconhecido")
 
 # ------------------------------------------------------------------------------
 # Funções Auxiliares para Programação
@@ -548,8 +545,9 @@ def build_cards_list(week_dates):
 
     for day_date in week_dates:
         date_str = day_date.strftime("%d/%m/%Y")
-        day_name_en = day_date.strftime("%A")
-        day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
+        day_name_pt = dia_semana_pt(day_date)
+        day_label = f"{day_name_pt} ({date_str})"
+
         filtered_acts = []
 
         for act_idx, act in enumerate(semana.get_dia(date_str)):
@@ -1164,33 +1162,25 @@ def main_app():
     # FUNÇÕES AUXILIARES PARA IMPRESSÃO
     # ======================================================
     def build_cards_list(week_dates):
-        """
-        Monta a lista de cards (dia a dia) para a impressão,
-        filtrando as atividades e servidores com base no estado dos checkboxes.
-        """
         cards_list = []
         for day_date in week_dates:
             date_str = day_date.strftime("%d/%m/%Y")
-            day_name_en = day_date.strftime("%A")
-            day_label = f"{dias_semana.get(day_name_en, day_name_en)} ({date_str})"
+            day_label = f"{dia_semana_pt(day_date)} ({date_str})"
             
             day_acts = st.session_state["atividades_dia"].get(date_str, [])
             filtered_acts = []
             for act_idx, act in enumerate(day_acts):
-                # Para atividades diferentes de "Expediente Administrativo",
-                # verificamos se o checkbox da atividade está marcado.
                 if act["atividade"] != "Expediente Administrativo":
                     act_key = f"checkbox_atividade_{date_str}_{act_idx}"
                     if not st.session_state.get(act_key, True):
-                        continue  # ignora atividade desmarcada
-                
-                # Filtra servidores: inclui apenas os que estiverem marcados.
+                        continue
+
                 filtered_servers = []
                 for s in act["servidores"]:
                     server_key = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
                     if st.session_state.get(server_key, True):
                         filtered_servers.append(s)
-                # Se não for Expediente e não houver servidores, ignora a atividade
+
                 if act["atividade"] != "Expediente Administrativo" and not filtered_servers:
                     continue
 
@@ -1205,6 +1195,7 @@ def main_app():
                 "Activities": filtered_acts
             })
         return cards_list
+
 
 
     def build_atividades_por_servidor(week_dates):
@@ -1394,7 +1385,11 @@ def main_app():
 
                         week_dates = st.session_state["semanas"][wid]
                         # day_options = [f"{dias_semana[d.strftime('%A')]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
-                        day_options = [f"{dias_semana[d.weekday()]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
+                        # day_options = [f"{dias_semana[d.weekday()]} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
+                        day_options = [f"{dia_semana_pt(d)} - {d.strftime('%d/%m/%Y')}" for d in week_dates]
+
+                       
+                       
                         option_to_date = {option: d for option, d in zip(day_options, week_dates)}
 
                         with top_col2:
@@ -1446,14 +1441,15 @@ def main_app():
 
                         # with top_col3:
                         with top_col3:
-                       # Resumo visual da semana
+                            # Resumo visual da semana
                             dias_com_atividades = []
                             for d in week_dates:
                                 ds = d.strftime("%d/%m/%Y")
-                                day_name_pt = dias_semana.get(d.strftime("%A"), d.strftime("%A"))
+                                day_name_pt = dia_semana_pt(d)
                                 acts = st.session_state["atividades_dia"].get(ds, [])
                                 if any(act["atividade"] != "Expediente Administrativo" for act in acts):
                                     dias_com_atividades.append(day_name_pt)
+
                             dias_label = "<br>".join(dias_com_atividades) if dias_com_atividades else "Nenhum"
 
                             activities_summary, servers_summary, vehicles_summary = get_summary_details_for_week(wid)
@@ -1471,41 +1467,28 @@ def main_app():
                                 }
                                 .summary-flex {
                                     display: flex;
-                                    flex-direction: row;
-                                    justify-content: space-between;
+                                    gap: 20px;
                                 }
                                 .summary-column {
                                     flex: 1;
-                                    padding: 5px;
-                                    margin-right: 10px;
-                                }
-                                .summary-column:last-child {
-                                    margin-right: 0;
                                 }
                                 </style>
                                 """,
                                 unsafe_allow_html=True
                             )
 
-                            # Monta o HTML do card com 4 colunas
+                            # Construção do HTML do resumo
                             summary_html = f"""
                             <div class="summary-card">
-                            <strong>📊 Resumo da Semana</strong>
-                            <div class="summary-flex">
-                                <div class="summary-column">
-                                <u>📅 Dia:</u><br>{dias_label}
-                                </div>
-                                <div class="summary-column">
-                                <u>🗂️ Atividades:</u><br>"""
-                            if activities_summary:
-                                for act, count in activities_summary.items():
-                                    summary_html += f"{act}: {count}<br>"
-                            else:
-                                summary_html += "Nenhuma<br>"
+                                <strong>📊 Resumo da Semana</strong>
+                                <div class="summary-flex">
+                                    <div class="summary-column">
+                                        <u>📅 Dias com atividades:</u><br>{dias_label}
+                                    </div>
+                                    <div class="summary-column">
+                                        <u>👥 Servidores:</u><br>
+                            """
 
-                            summary_html += """</div>
-                                <div class="summary-column">
-                                <u>👥Servidores:</u><br>"""
                             if servers_summary:
                                 for serv, count in servers_summary.items():
                                     primeiro_nome = serv.split()[0]
@@ -1513,36 +1496,46 @@ def main_app():
                             else:
                                 summary_html += "Nenhum<br>"
 
-                            summary_html += """</div>
-                                <div class="summary-column">
-                                <u>🚗Veículos:</u><br>"""
+                            summary_html += """
+                                    </div>
+                                    <div class="summary-column">
+                                        <u>🚗 Veículos:</u><br>
+                            """
+
                             if vehicles_summary:
                                 for veic, count in vehicles_summary.items():
                                     summary_html += f"{veic}: {count}<br>"
                             else:
                                 summary_html += "Nenhum<br>"
 
-                            summary_html += """</div>
+                            summary_html += """
+                                    </div>
+                                </div>
                             </div>
-                            </div>"""
+                            """
 
                             # Exibe o card de resumo
                             st.markdown(summary_html, unsafe_allow_html=True)
 
                         st.markdown("---")
 
+
                         # =========== Listagem das atividades (um bloco por dia) ===========
+                     
                         cols = st.columns(len(week_dates))
+
                         for j, current_date in enumerate(week_dates):
                             with cols[j]:
-                                ds = current_date.strftime("%d/%m/%Y")
+                                date_str = current_date.strftime("%d/%m/%Y")
                                 day_name_en = current_date.strftime("%A")
-                                day_name_pt = dias_semana.get(day_name_en, day_name_en)
+                                day_name_pt = dia_semana_pt(current_date)
+
+                                day_label = f"{day_name_pt} ({date_str})"
 
                                 # Exibe o título do dia
-                                st.markdown(f"##### {day_name_pt} - {ds}")
+                                st.markdown(f"##### {day_label}")
 
-                                day_acts = st.session_state["atividades_dia"].get(ds, [])
+                                day_acts = st.session_state["atividades_dia"].get(date_str, [])
                                 if day_acts:
                                     for act_idx, atividade in enumerate(day_acts):
                                         st.markdown(f"##### Atividade: {atividade['atividade']}")
@@ -1551,35 +1544,34 @@ def main_app():
                                             # [REFATORADO]
                                             activity_checked = st.checkbox(
                                                 f"Marcar atividade: {atividade['atividade']}",
-                                                value=is_checkbox_checked(ds, "atividade", act_idx),
-                                                key=f"checkbox_atividade_{ds}_{act_idx}",
+                                                value=is_checkbox_checked(date_str, "atividade", act_idx),
+                                                key=f"checkbox_atividade_{date_str}_{act_idx}",
                                                 on_change=set_checkbox_unchecked,
-                                                args=(ds, "atividade", act_idx)
+                                                args=(date_str, "atividade", act_idx)
                                             )
                                             if not activity_checked:
-                                                remove_activity_card(ds, act_idx)
+                                                remove_activity_card(date_str, act_idx)
                                                 st.rerun()
 
                                             st.write("👥 Servidores: (❌ desmarque para remover da atividade e retornar para 🗂️ Expediente Administrativo)")
 
                                             for s in atividade["servidores"][:]:
-                                                key_server = f"checkbox_servidor_{ds}_{act_idx}_{s}"
+                                                key_server = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
 
-                                                # [REFATORADO]
                                                 server_checked = st.checkbox(
                                                     s,
-                                                    value=is_checkbox_checked(ds, "servidor", act_idx, s),
+                                                    value=is_checkbox_checked(date_str, "servidor", act_idx, s),
                                                     key=key_server,
                                                     on_change=set_checkbox_unchecked,
-                                                    args=(ds, "servidor", act_idx, s)
+                                                    args=(date_str, "servidor", act_idx, s)
                                                 )
                                                 if not server_checked:
-                                                    remove_server_from_card(ds, act_idx, s)
+                                                    remove_server_from_card(date_str, act_idx, s)
                                                     st.rerun()
                                         else:
                                             st.write("👥 Servidores: (❌ desmarque para não incluir na 🖨️ impressão)")
                                             for s in atividade["servidores"]:
-                                                key_server = f"checkbox_servidor_{ds}_{act_idx}_{s}"
+                                                key_server = f"checkbox_servidor_{date_str}_{act_idx}_{s}"
                                                 st.checkbox(
                                                     s,
                                                     value=True,
@@ -1588,6 +1580,7 @@ def main_app():
                                                 )
 
                                         st.write(f"**🚗 Veículo:** {atividade['veiculo']}")
+
                                         st.markdown("---")
                                 else:
                                     st.write("📭 Nenhuma atividade para este dia.")
